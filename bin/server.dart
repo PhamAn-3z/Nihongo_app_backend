@@ -3,56 +3,42 @@ import 'dart:io';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:shelf_router/shelf_router.dart';
+import 'package:supabase/supabase.dart'; // <--- IMPORT THƯ VIỆN
 
 void main() async {
-  // 1. Khởi tạo bộ định tuyến (Router) để quản lý các đường link API
+  // 1. CẤU HÌNH ĐƯỜNG DÂY KẾT NỐI ĐẾN SUPABASE
+  // (Thay 2 chuỗi này bằng URL và Anon Key thật trên trang web Supabase của nhóm bạn)
+  final String supabaseUrl = 'https://xdekwfqnhrohydgejhdk.supabase.co';
+  final String supabaseKey = 'sb_publishable_Mk288brWkRYpm14YH2xAOw_sAb6qcyW';
+
+  // Khởi tạo thực thể Supabase Client ngay khi Server chạy
+  final supabaseClient = SupabaseClient(supabaseUrl, supabaseKey);
+  print('🔌 Đang thiết lập đường dây kết nối đến Supabase Cloud...');
+
   final router = Router();
 
-  // 2. Định nghĩa một đường link API chạy thử (GET Method)
-  router.get('/api/v1/status', (Request request) {
-    final responseData = {
-      "status": "success",
-      "message": "Kết nối đến Động Docker Backend thành công mỹ mãn!",
-      "timestamp": DateTime.now().toIso8601String()
-    };
-    // Trả về dữ liệu dạng JSON cho người gọi
-    return Response.ok(
-      jsonEncode(responseData),
-      headers: {'content-type': 'application/json'},
-    );
-  });
+  // 2. API TRUY VẤN DỮ LIỆU THẬT TỪ DATABASE
+  // Ví dụ: API lấy danh sách bộ thẻ từ bảng 'decks' dưới database Supabase
+  router.get('/api/v1/decks', (Request request) async {
+    try {
+      // Chọc thẳng vào bảng 'decks' trên mây để lấy dữ liệu thật bằng lệnh của Supabase
+      final List<dynamic> response = await supabaseClient.from('decks').select();
 
-  // 3. Định nghĩa API Đăng nhập mẫu (POST Method)
-  router.post('/api/v1/auth/login', (Request request) async {
-    // Đọc dữ liệu tài khoản/mật khẩu mà app Flutter gửi lên
-    final body = await request.readAsString();
-    final data = jsonDecode(body);
-
-    final String email = data['email'] ?? '';
-    final String password = data['password'] ?? '';
-
-    // Logic kiểm tra tài khoản giả lập (Tạm thời test chay trước khi chọc vào Supabase)
-    if (email == "admin@gmail.com" && password == "123456") {
       return Response.ok(
-        jsonEncode({
-          "status": "success",
-          "message": "Đăng nhập thành công!",
-          "user": {"id": 1, "email": email, "username": "Admin Đẹp Trai"}
-        }),
+        jsonEncode({"status": "success", "data": response}),
         headers: {'content-type': 'application/json'},
       );
-    } else {
-      return Response.forbidden(
-        jsonEncode({"status": "error", "message": "Sai tài khoản hoặc mật khẩu rồi bạn ơi!"}),
+    } catch (e) {
+      return Response.internalServerError(
+        body: jsonEncode({"status": "error", "message": "Lỗi kết nối DB: $e"}), // Thêm body: vào đây 🌟
         headers: {'content-type': 'application/json'},
       );
     }
   });
 
-  // 4. Cấu hình để Server Docker có thể lắng nghe từ mọi địa chỉ IP (0.0.0.0)
-  // Trong môi trường Docker, bắt buộc phải dùng '0.0.0.0' thay vì 'localhost'
+  // Cấu hình khởi chạy Server
   final handler = Pipeline().addMiddleware(logRequests()).addHandler(router);
   final server = await shelf_io.serve(handler, InternetAddress.anyIPv4, 8080);
 
-  print('🚀 THÀNH CÔNG: Xe tải Docker Backend đang nổ máy tại cổng: http://${server.address.host}:${server.port}');
+  print('🚀 THÀNH CÔNG: Server Docker đã thông mạch với Supabase tại cổng: :8080');
 }

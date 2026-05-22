@@ -8,13 +8,19 @@ RUN dart pub get
 
 # Copy app source code (except anything in .dockerignore) and AOT compile app.
 COPY . .
-RUN dart build cli --target bin/server.dart -o output
+# RUN dart build cli --target bin/server.dart -o output (Dòng bị lỗi)
+RUN dart compile exe bin/server.dart -o bin/server
 
 # Build minimal serving image from AOT-compiled `/server`
 # and the pre-built AOT-runtime in the `/runtime/` directory of the base image.
-FROM scratch
-COPY --from=build /runtime/ /
-COPY --from=build /app/output/bundle/ /app/
+# FROM scratch
+# COPY --from=build /runtime/ /
+# COPY --from=build /app/output/bundle/ /app/ (?)
+
+# 6. Sử dụng một image runtime siêu nhẹ để chạy file thực thi nhằm giảm dung lượng
+FROM subfuzion/dart:slim
+WORKDIR /app
+COPY --from=build /app/bin/server /app/bin/server
 
 # Start server.
 EXPOSE 8080
