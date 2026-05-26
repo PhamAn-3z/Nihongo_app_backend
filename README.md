@@ -1,49 +1,35 @@
-A server app built using [Shelf](https://pub.dev/packages/shelf),
-configured to enable running with [Docker](https://www.docker.com/).
+# Nihongo App Backend
 
-This sample code handles HTTP GET requests to `/` and `/echo/<message>`
+Dự án backend cho ứng dụng học tiếng Nhật (Nihongo App), sử dụng Dart và framework Shelf.
 
-# Running the sample
+## Tính năng hiện tại
+- Kết nối trực tiếp với **Supabase Cloud**.
+- API cung cấp dữ liệu thật từ database.
 
-## Running with the Dart SDK
+## Các API Endpoints
+- `GET /api/v1/decks`: Lấy danh sách bộ thẻ (decks) từ bảng `decks` trên Supabase.
 
-You can run the example with the [Dart SDK](https://dart.dev/get-dart)
-like this:
+## Cách chạy dự án
 
-```
-$ dart run bin/server.dart
-Server listening on port 8080
-```
+### 1. Chạy với Dart SDK
+Đảm bảo bạn đã cài đặt Dart SDK. Chạy lệnh sau trong terminal:
 
-And then from a second terminal:
-```
-$ curl http://0.0.0.0:8080
-Hello, World!
-$ curl http://0.0.0.0:8080/echo/I_love_Dart
-I_love_Dart
+```bash
+dart pub get
+dart run bin/server.dart
 ```
 
-## Running with Docker
+Server sẽ lắng nghe tại cổng `8080`. Bạn có thể kiểm tra bằng cách truy cập:
+`http://localhost:8080/api/v1/decks`
 
-If you have [Docker Desktop](https://www.docker.com/get-started) installed, you
-can build and run with the `docker` command:
+### 2. Chạy với Docker
+Nếu bạn có Docker, hãy sử dụng các lệnh sau:
 
-```
-$ docker build . -t myserver
-$ docker run -it -p 8080:8080 myserver
-Server listening on port 8080
-```
-
-And then from a second terminal:
-```
-$ curl http://0.0.0.0:8080
-Hello, World!
-$ curl http://0.0.0.0:8080/echo/I_love_Dart
-I_love_Dart
+```bash
+docker build . -t nihongo-backend
+docker run -it -p 8080:8080 nihongo-backend
 ```
 
-You should see the logging printed in the first terminal:
-```
-2021-05-06T15:47:04.620417  0:00:00.000158 GET     [200] /
-2021-05-06T15:47:08.392928  0:00:00.001216 GET     [200] /echo/I_love_Dart
-```
+## Cấu trúc mã nguồn
+- `bin/server.dart`: Chứa cấu hình server, kết nối Supabase và định nghĩa router.
+- `pubspec.yaml`: Quản lý các dependency (`shelf`, `shelf_router`, `supabase`).
