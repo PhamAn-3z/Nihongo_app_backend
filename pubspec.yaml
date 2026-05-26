@@ -10,6 +10,9 @@ dependencies:
   shelf: ^1.4.2
   shelf_router: ^1.1.2
   supabase: ^2.6.0
+  dart_jsonwebtoken: ^2.12.2
+  dotenv: ^4.2.0
+  crypto: ^3.0.3
 
 dev_dependencies:
   http: ^1.2.2
