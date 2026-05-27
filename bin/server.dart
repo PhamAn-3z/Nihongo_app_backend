@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:async';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:shelf_router/shelf_router.dart';
@@ -7,9 +8,29 @@ import 'package:supabase/supabase.dart';
 
 // Import các layer theo kiến trúc Spring Boot
 import 'package:flashcard_quiz_backend/repositories/user_repository.dart';
+import 'package:flashcard_quiz_backend/repositories/membership_repository.dart';
+import 'package:flashcard_quiz_backend/repositories/promo_code_repository.dart';
+import 'package:flashcard_quiz_backend/repositories/receipt_repository.dart';
+import 'package:flashcard_quiz_backend/repositories/user_stats_repository.dart';
+
 import 'package:flashcard_quiz_backend/services/auth_service.dart';
+import 'package:flashcard_quiz_backend/services/membership_service.dart';
+import 'package:flashcard_quiz_backend/services/promo_code_service.dart';
+import 'package:flashcard_quiz_backend/services/receipt_service.dart';
+import 'package:flashcard_quiz_backend/services/user_stats_service.dart';
+
 import 'package:flashcard_quiz_backend/controllers/auth_controller.dart';
+import 'package:flashcard_quiz_backend/controllers/membership_controller.dart';
+import 'package:flashcard_quiz_backend/controllers/promo_code_controller.dart';
+import 'package:flashcard_quiz_backend/controllers/receipt_controller.dart';
+import 'package:flashcard_quiz_backend/controllers/user_stats_controller.dart';
+
 import 'package:flashcard_quiz_backend/routes/auth_routes.dart';
+import 'package:flashcard_quiz_backend/routes/membership_routes.dart';
+import 'package:flashcard_quiz_backend/routes/promo_code_routes.dart';
+import 'package:flashcard_quiz_backend/routes/receipt_routes.dart';
+import 'package:flashcard_quiz_backend/routes/user_stats_routes.dart';
+
 import 'package:flashcard_quiz_backend/middlewares/auth_middleware.dart';
 
 void main() async {
@@ -21,14 +42,50 @@ void main() async {
   print('🔌 Đang thiết lập kết nối đến Supabase Cloud...');
 
   // 2. Khởi tạo các thành phần (Dependency Injection)
+  
+  // Repositories
   final userRepository = UserRepository(supabaseClient);
+  final membershipRepository = MembershipRepository(supabaseClient);
+  final promoCodeRepository = PromoCodeRepository(supabaseClient);
+  final receiptRepository = ReceiptRepository(supabaseClient);
+  final userStatsRepository = UserStatsRepository(supabaseClient);
+
+  // Services
   final authService = AuthService(userRepository);
+  final membershipService = MembershipService(membershipRepository);
+  final promoCodeService = PromoCodeService(promoCodeRepository);
+  final receiptService = ReceiptService(
+    receiptRepository,
+    membershipRepository,
+    promoCodeRepository,
+  );
+  final userStatsService = UserStatsService(userStatsRepository);
+
+  // Controllers
   final authController = AuthController(authService);
+  final membershipController = MembershipController(membershipService);
+  final promoCodeController = PromoCodeController(promoCodeService);
+  final receiptController = ReceiptController(receiptService);
+  final userStatsController = UserStatsController(userStatsService);
 
   final router = Router();
 
-  // Đăng ký các route Authentication (Public)
+  // Đăng ký các route
   router.mount('/api/v1/auth/', authRoutes(authController));
+  router.mount('/api/v1/memberships/', membershipRoutes(membershipController));
+  router.mount('/api/v1/promos/', promoCodeRoutes(promoCodeController));
+  router.mount('/api/v1/receipts/', receiptRoutes(receiptController));
+  router.mount('/api/v1/stats/', userStatsRoutes(userStatsController));
+
+  // 2.1 Start Background Cleanup Task (Every 5 minutes)
+  Timer.periodic(Duration(minutes: 5), (timer) async {
+    print('🧹 [${DateTime.now()}] Running background cleanup: Deleting expired unpaid receipts...');
+    try {
+      await receiptService.cleanupExpiredReceipts();
+    } catch (e) {
+      print('❌ Cleanup error: $e');
+    }
+  });
 
   // 3. API Decks (Public)
   router.get('/api/v1/decks', (Request request) async {
@@ -47,7 +104,6 @@ void main() async {
   });
 
   // 4. Route được bảo vệ (Yêu cầu JWT Token)
-  // Ví dụ: Endpoint lấy thông tin cá nhân (Profile)
   router.get('/api/v1/profile', (Request request) {
     return Response.ok(
       jsonEncode({"message": "Chào mừng! Bạn đã truy cập được vào dữ liệu yêu cầu bảo mật."}),
@@ -57,10 +113,11 @@ void main() async {
 
   // 5. Cấu hình Middleware Pipeline
   final handler = Pipeline()
-      .addMiddleware(logRequests()) // Log mọi request để dễ debug
+      .addMiddleware(logRequests())
       .addHandler((Request request) {
-        // Áp dụng authMiddleware cho các endpoint cần bảo mật (ví dụ: profile)
-        if (request.url.path.startsWith('api/v1/profile')) {
+        if (request.url.path.startsWith('api/v1/profile') ||
+            request.url.path.startsWith('api/v1/stats') ||
+            request.url.path.startsWith('api/v1/receipts')) {
           return authMiddleware()(router)(request);
         }
         return router(request);
