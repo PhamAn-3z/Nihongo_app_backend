@@ -49,9 +49,9 @@ class AuthService {
       return null;
     }
 
-    // Tạo JWT token
+    // Tạo JWT token - Đổi từ 'id' sang 'user_id'
     final token = JwtService.generateToken(
-      userId: user['id'].toString(),
+      userId: user['user_id'].toString(),
       email: user['email'],
     );
 

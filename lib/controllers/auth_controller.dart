@@ -81,7 +81,7 @@ class AuthController {
         jsonEncode({
           'message': 'User registered successfully',
           'user': {
-            'id': user?['id'],
+            'id': user?['user_id'], // Đổi từ 'id' sang 'user_id' để khớp với Supabase
             'email': user?['email'],
             'username': user?['username'],
           },
