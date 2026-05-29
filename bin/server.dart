@@ -24,13 +24,16 @@ import 'package:flashcard_quiz_backend/controllers/membership_controller.dart';
 import 'package:flashcard_quiz_backend/controllers/promo_code_controller.dart';
 import 'package:flashcard_quiz_backend/controllers/receipt_controller.dart';
 import 'package:flashcard_quiz_backend/controllers/user_stats_controller.dart';
+import 'package:flashcard_quiz_backend/controllers/vnpay_controller.dart';
 
 import 'package:flashcard_quiz_backend/routes/auth_routes.dart';
 import 'package:flashcard_quiz_backend/routes/membership_routes.dart';
 import 'package:flashcard_quiz_backend/routes/promo_code_routes.dart';
 import 'package:flashcard_quiz_backend/routes/receipt_routes.dart';
 import 'package:flashcard_quiz_backend/routes/user_stats_routes.dart';
+import 'package:flashcard_quiz_backend/routes/vnpay_routes.dart';
 
+import 'package:flashcard_quiz_backend/services/vnpay_service.dart';
 import 'package:flashcard_quiz_backend/middlewares/auth_middleware.dart';
 
 void main() async {
@@ -68,6 +71,15 @@ void main() async {
   final receiptController = ReceiptController(receiptService);
   final userStatsController = UserStatsController(userStatsService);
 
+  // VNPay Integration
+  final vnpayService = VNPayService(
+    tmnCode: '1S17VILY', // Sandbox TmnCode
+    hashSecret: 'G55U17H711LSR6MOJS12WWI41XE5CCPF', // Sandbox HashSecret
+    vnpUrl: 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html',
+    returnUrl: 'http://localhost:8080/api/v1/vnpay/vnpay_return',
+  );
+  final vnpayController = VNPayController(vnpayService, receiptService);
+
   final router = Router();
 
   // Đăng ký các route
@@ -76,6 +88,7 @@ void main() async {
   router.mount('/api/v1/promos/', promoCodeRoutes(promoCodeController));
   router.mount('/api/v1/receipts/', receiptRoutes(receiptController));
   router.mount('/api/v1/stats/', userStatsRoutes(userStatsController));
+  router.mount('/api/v1/vnpay/', vnpayRoutes(vnpayController));
 
   // 2.1 Start Background Cleanup Task (Every 5 minutes)
   Timer.periodic(Duration(minutes: 5), (timer) async {
@@ -124,7 +137,8 @@ void main() async {
       });
 
   // 6. Khởi chạy Server
-  final server = await shelf_io.serve(handler, InternetAddress.anyIPv4, 8080);
+  final port = int.parse(Platform.environment['PORT'] ?? '8080');
+  final server = await shelf_io.serve(handler, InternetAddress.anyIPv4, port);
 
   print('🚀 SERVER ĐANG CHẠY TẠI: http://${server.address.host}:${server.port}');
 }
