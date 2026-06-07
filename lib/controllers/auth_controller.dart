@@ -81,7 +81,7 @@ class AuthController {
         jsonEncode({
           'message': 'User registered successfully',
           'user': {
-            'id': user?['user_id'], // Đổi từ 'id' sang 'user_id' để khớp với Supabase
+            'id': user?['user_id'],
             'email': user?['email'],
             'username': user?['username'],
           },
@@ -98,5 +98,13 @@ class AuthController {
         headers: {'Content-Type': 'application/json'},
       );
     }
+  }
+
+  // Thêm API Logout
+  Future<Response> logout(Request request) async {
+    return Response.ok(
+      jsonEncode({'message': 'Logged out successfully'}),
+      headers: {'Content-Type': 'application/json'},
+    );
   }
 }

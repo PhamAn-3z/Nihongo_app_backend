@@ -43,8 +43,8 @@ void main() async {
   final handler = Pipeline()
       .addMiddleware(logRequests())
       .addHandler((Request request) {
-        // Kiểm tra xem path có thuộc vùng bảo mật /user/ không
-        if (request.url.path.contains('api/v1/user')) {
+        // Kiểm tra xem path có thuộc vùng bảo mật /user/ hoặc là logout không
+        if (request.url.path.contains('api/v1/user') || request.url.path.endsWith('auth/logout')) {
           return authMiddleware()(router)(request);
         }
         

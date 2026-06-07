@@ -10,5 +10,8 @@ Router authRoutes(AuthController controller) {
   // API Đăng ký: POST /api/v1/auth/register
   router.post('/register', controller.register);
 
+  // API Đăng xuất: POST /api/v1/auth/logout
+  router.post('/logout', controller.logout);
+
   return router;
 }
