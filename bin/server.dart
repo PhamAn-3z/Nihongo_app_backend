@@ -16,7 +16,7 @@ import 'package:flashcard_quiz_backend/middlewares/auth_middleware.dart';
 
 void main() async {
   final String supabaseUrl = 'https://xdekwfqnhrohydgejhdk.supabase.co';
-  final String supabaseKey = 'sb_publishable_Mk288brWkRYpm14YH2xAOw_sAb6qcyW';
+  final String supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkZWt3ZnFuaHJvaHlkZ2VqaGRrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzNjk1NTIsImV4cCI6MjA5NDk0NTU1Mn0.entE4M0y_37r-PuUrZ-YO879QMfuMGQJe-S8QrYRU-4';
 
   final supabaseClient = SupabaseClient(supabaseUrl, supabaseKey);
   print('🔌 Đang kết nối Supabase...');
