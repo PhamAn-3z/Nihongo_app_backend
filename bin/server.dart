@@ -13,6 +13,7 @@ import 'package:flashcard_quiz_backend/controllers/user_controller.dart';
 import 'package:flashcard_quiz_backend/routes/auth_routes.dart';
 import 'package:flashcard_quiz_backend/routes/user_routes.dart';
 import 'package:flashcard_quiz_backend/middlewares/auth_middleware.dart';
+import 'package:flashcard_quiz_backend/middlewares/cors_middleware.dart';
 
 void main() async {
   final String supabaseUrl = 'https://xdekwfqnhrohydgejhdk.supabase.co';
@@ -42,14 +43,15 @@ void main() async {
   // Pipeline xử lý Request
   final handler = Pipeline()
       .addMiddleware(logRequests())
+      .addMiddleware(corsMiddleware()) // Thêm CORS Middleware ở đây
       .addHandler((Request request) {
-        // Kiểm tra xem path có thuộc vùng bảo mật /user/ hoặc là logout không
-        if (request.url.path.contains('api/v1/user') || request.url.path.endsWith('auth/logout')) {
-          return authMiddleware()(router)(request);
-        }
-        
-        return router(request);
-      });
+    // Kiểm tra xem path có thuộc vùng bảo mật /user/ hoặc là logout không
+    if (request.url.path.contains('api/v1/user') || request.url.path.endsWith('auth/logout')) {
+      return authMiddleware()(router)(request);
+    }
+
+    return router(request);
+  });
 
   final server = await shelf_io.serve(handler, InternetAddress.anyIPv4, 8080);
   print('🚀 Server đang chạy tại http://${server.address.host}:${server.port}');
