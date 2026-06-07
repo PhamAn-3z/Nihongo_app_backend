@@ -24,7 +24,7 @@ import 'package:flashcard_quiz_backend/controllers/membership_controller.dart';
 import 'package:flashcard_quiz_backend/controllers/promo_code_controller.dart';
 import 'package:flashcard_quiz_backend/controllers/receipt_controller.dart';
 import 'package:flashcard_quiz_backend/controllers/user_stats_controller.dart';
-import 'package:flashcard_quiz_backend/controllers/vnpay_controller.dart';
+
 
 import 'package:flashcard_quiz_backend/routes/auth_routes.dart';
 import 'package:flashcard_quiz_backend/routes/membership_routes.dart';
@@ -34,6 +34,11 @@ import 'package:flashcard_quiz_backend/routes/user_stats_routes.dart';
 import 'package:flashcard_quiz_backend/routes/vnpay_routes.dart';
 
 import 'package:flashcard_quiz_backend/services/vnpay_service.dart';
+
+import 'package:flashcard_quiz_backend/controllers/vnpay_controller.dart';
+
+
+
 import 'package:flashcard_quiz_backend/middlewares/auth_middleware.dart';
 
 void main() async {
@@ -63,6 +68,7 @@ void main() async {
     promoCodeRepository,
   );
   final userStatsService = UserStatsService(userStatsRepository);
+  final vnpayService = VnPayService();
 
   // Controllers
   final authController = AuthController(authService);
@@ -70,25 +76,10 @@ void main() async {
   final promoCodeController = PromoCodeController(promoCodeService);
   final receiptController = ReceiptController(receiptService);
   final userStatsController = UserStatsController(userStatsService);
+  final vnpayController = VnPayController(vnpayService, receiptService);
 
-  // VNPay Integration
-  final vnpayService = VNPayService(
-    tmnCode: '1S17VILY', // Sandbox TmnCode
-    hashSecret: 'G55U17H711LSR6MOJS12WWI41XE5CCPF', // Sandbox HashSecret
-    vnpUrl: 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html',
-    returnUrl: 'http://localhost:8080/api/v1/vnpay/vnpay_return',
-  );
-  final vnpayController = VNPayController(vnpayService, receiptService);
 
-  final router = Router();
 
-  // Đăng ký các route
-  router.mount('/api/v1/auth/', authRoutes(authController));
-  router.mount('/api/v1/memberships/', membershipRoutes(membershipController));
-  router.mount('/api/v1/promos/', promoCodeRoutes(promoCodeController));
-  router.mount('/api/v1/receipts/', receiptRoutes(receiptController));
-  router.mount('/api/v1/stats/', userStatsRoutes(userStatsController));
-  router.mount('/api/v1/vnpay/', vnpayRoutes(vnpayController));
 
   // 2.1 Start Background Cleanup Task (Every 5 minutes)
   Timer.periodic(Duration(minutes: 5), (timer) async {
@@ -100,7 +91,18 @@ void main() async {
     }
   });
 
-  // 3. API Decks (Public)
+  // 3. Khởi tạo Router chính
+  final router = Router();
+
+  // Mount các sub-routes
+  router.mount('/api/v1/auth', authRoutes(authController));
+  router.mount('/api/v1/memberships', membershipRoutes(membershipController));
+  router.mount('/api/v1/promo-codes', promoCodeRoutes(promoCodeController));
+  router.mount('/api/v1/receipts', receiptRoutes(receiptController));
+  router.mount('/api/v1/stats', userStatsRoutes(userStatsController));
+  router.mount('/api/v1/vnpay', vnpayRoutes(vnpayController));
+
+  // 4. API Decks (Public)
   router.get('/api/v1/decks', (Request request) async {
     try {
       final List<dynamic> response = await supabaseClient.from('decks').select();
@@ -116,7 +118,7 @@ void main() async {
     }
   });
 
-  // 4. Route được bảo vệ (Yêu cầu JWT Token)
+  // 5. Route được bảo vệ (Yêu cầu JWT Token)
   router.get('/api/v1/profile', (Request request) {
     return Response.ok(
       jsonEncode({"message": "Chào mừng! Bạn đã truy cập được vào dữ liệu yêu cầu bảo mật."}),
@@ -124,17 +126,21 @@ void main() async {
     );
   });
 
-  // 5. Cấu hình Middleware Pipeline
+  // 6. Cấu hình Middleware Pipeline
   final handler = Pipeline()
       .addMiddleware(logRequests())
-      .addHandler((Request request) {
-        if (request.url.path.startsWith('api/v1/profile') ||
-            request.url.path.startsWith('api/v1/stats') ||
-            request.url.path.startsWith('api/v1/receipts')) {
-          return authMiddleware()(router)(request);
-        }
-        return router(request);
-      });
+      .addMiddleware((Handler innerHandler) {
+        return (Request request) {
+          // Áp dụng authMiddleware cho các path cụ thể
+          if (request.url.path.startsWith('api/v1/profile') ||
+              request.url.path.startsWith('api/v1/stats') ||
+              request.url.path.startsWith('api/v1/receipts')) {
+            return authMiddleware()(innerHandler)(request);
+          }
+          return innerHandler(request);
+        };
+      })
+      .addHandler(router);
 
   // 6. Khởi chạy Server
   final port = int.parse(Platform.environment['PORT'] ?? '8080');

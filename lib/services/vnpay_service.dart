@@ -2,106 +2,77 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:intl/intl.dart';
 
-class VNPayService {
-  final String tmnCode;
-  final String hashSecret;
-  final String vnpUrl;
-  final String returnUrl;
-
-  VNPayService({
-    required this.tmnCode,
-    required this.hashSecret,
-    required this.vnpUrl,
-    required this.returnUrl,
-  });
+class VnPayService {
+  final String tmnCode = 'MZZV5KJR';
+  final String hashKey = '0SARJ6THU4YHS695PTVTFHYKSIQ109N5';
+  final String vnpUrl = 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html';
 
   String createPaymentUrl({
-    required String orderId,
     required double amount,
     required String orderInfo,
-    required String ipAddress,
-    DateTime? createDate,
+    required String txnRef,
+    required String returnUrl,
+    required String ipAddr,
   }) {
-    final date = createDate ?? DateTime.now();
-    final vnpCreateDate = DateFormat('yyyyMMddHHmmss').format(date);
+    final createDate = DateFormat('yyyyMMddHHmmss').format(DateTime.now());
     
-    // VNPay amount is in VND and multiplied by 100
-    final vnpAmount = (amount * 100).toInt().toString();
-
-    var params = {
-      'vnp_Version': '2.1.0',
-      'vnp_Command': 'pay',
-      'vnp_TmnCode': tmnCode,
-      'vnp_Amount': vnpAmount,
-      'vnp_CreateDate': vnpCreateDate,
-      'vnp_CurrCode': 'VND',
-      'vnp_IpAddr': ipAddress,
-      'vnp_Locale': 'vn',
-      'vnp_OrderInfo': orderInfo,
-      'vnp_OrderType': 'other',
-      'vnp_ReturnUrl': returnUrl,
-      'vnp_TxnRef': orderId,
+    Map<String, String> params = {
+      "vnp_Version": "2.1.0",
+      "vnp_Command": "pay",
+      "vnp_TmnCode": tmnCode,
+      "vnp_Amount": (amount * 100).toInt().toString(),
+      "vnp_CreateDate": createDate,
+      "vnp_CurrCode": "VND",
+      "vnp_IpAddr": ipAddr,
+      "vnp_Locale": "vn",
+      "vnp_OrderInfo": orderInfo,
+      "vnp_OrderType": "other",
+      "vnp_ReturnUrl": returnUrl,
+      "vnp_TxnRef": txnRef,
     };
 
-    // Sort params by key
+    // 1. Sắp xếp params theo alphabet
     var sortedKeys = params.keys.toList()..sort();
     
-    // Build query string for signing
-    // Use Uri.encodeQueryComponent for values to ensure '+' instead of '%20' for spaces
-    var signData = sortedKeys
-        .map((key) => '$key=${Uri.encodeQueryComponent(params[key]!)}')
-        .join('&');
+    // 2. Tạo chuỗi query (Dùng Uri.encodeQueryComponent để mã hóa khoảng trắng thành '+')
+    String queryString = sortedKeys.map((key) {
+      return "${Uri.encodeQueryComponent(key)}=${Uri.encodeQueryComponent(params[key]!)}";
+    }).join("&");
 
-    // Generate HMAC-SHA512
-    var hmac = Hmac(sha512, utf8.encode(hashSecret));
-    var signature = hmac.convert(utf8.encode(signData)).toString();
+    // 3. Tạo HMAC-SHA512 từ chuỗi query
+    var keyBytes = utf8.encode(hashKey);
+    var dataBytes = utf8.encode(queryString);
+    var hmacSha512 = Hmac(sha512, keyBytes);
+    var hashValue = hmacSha512.convert(dataBytes).toString();
 
-    // Build final URL
-    var finalUrl = '$vnpUrl?$signData&vnp_SecureHash=$signature';
-    
-    return finalUrl;
+    // 4. Trả về URL hoàn chỉnh
+    return "$vnpUrl?$queryString&vnp_SecureHash=$hashValue";
   }
 
   bool verifyHash(Map<String, String> params) {
-    var vnpSecureHash = params['vnp_SecureHash'];
+    final vnpSecureHash = params['vnp_SecureHash'];
     if (vnpSecureHash == null) return false;
 
-    // DEBUG BYPASS: Allow 'debug' as a signature for easier manual testing in Postman
-    if (vnpSecureHash == 'debug') {
-      print('⚠️ WARNING: Using DEBUG bypass for VNPay signature verification');
-      return true;
-    }
+    // Lấy các params dữ liệu, loại bỏ hash
+    final dataParams = Map<String, String>.from(params)
+      ..remove('vnp_SecureHash')
+      ..remove('vnp_SecureHashType');
 
-    // Filter and sort parameters
-    // 1. Only include parameters starting with 'vnp_'
-    // 2. Exclude 'vnp_SecureHash' and 'vnp_SecureHashType'
-    // 3. Exclude empty values
-    var signParams = <String, String>{};
-    params.forEach((key, value) {
-      if (key.startsWith('vnp_') && 
-          key != 'vnp_SecureHash' && 
-          key != 'vnp_SecureHashType' && 
-          value.isNotEmpty) {
-        signParams[key] = value;
-      }
-    });
-
-    var sortedKeys = signParams.keys.toList()..sort();
+    // Sắp xếp
+    var sortedKeys = dataParams.keys.toList()..sort();
     
-    // Build query string
-    // IMPORTANT: VNPay return URL usually encodes spaces as '+'
-    var signData = sortedKeys
-        .map((key) => '$key=${Uri.encodeQueryComponent(signParams[key]!)}')
-        .join('&');
+    // Build lại chuỗi data để kiểm tra chữ ký
+    // Lưu ý: Các giá trị nhận về từ request thường đã được decode, 
+    // nên cần encode lại đúng chuẩn để khớp với chữ ký VNPay gửi sang.
+    String queryString = sortedKeys.map((key) {
+      return "${Uri.encodeQueryComponent(key)}=${Uri.encodeQueryComponent(dataParams[key]!)}";
+    }).join("&");
 
-    // Generate HMAC-SHA512
-    var hmac = Hmac(sha512, utf8.encode(hashSecret));
-    var signature = hmac.convert(utf8.encode(signData)).toString();
+    var keyBytes = utf8.encode(hashKey);
+    var dataBytes = utf8.encode(queryString);
+    var hmacSha512 = Hmac(sha512, keyBytes);
+    var hashValue = hmacSha512.convert(dataBytes).toString();
 
-    print('DEBUG: VNPay Sign Data: $signData');
-    print('DEBUG: Calculated Signature: $signature');
-    print('DEBUG: Received Signature: $vnpSecureHash');
-
-    return signature.toLowerCase() == vnpSecureHash.toLowerCase();
+    return hashValue.toLowerCase() == vnpSecureHash.toLowerCase();
   }
 }

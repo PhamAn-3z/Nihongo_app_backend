@@ -1,112 +1,131 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:shelf/shelf.dart';
 import '../services/vnpay_service.dart';
 import '../services/receipt_service.dart';
 
-class VNPayController {
-  final VNPayService vnpayService;
+class VnPayController {
+  final VnPayService vnpayService;
   final ReceiptService receiptService;
 
-  VNPayController(this.vnpayService, this.receiptService);
+  VnPayController(this.vnpayService, this.receiptService);
 
-  Future<Response> createPaymentUrl(Request request) async {
+  Future<Response> createPayment(Request request) async {
     try {
-      final content = await request.readAsString();
-      if (content.isEmpty) {
-        return Response.badRequest(body: jsonEncode({'status': 'error', 'message': 'Request body is empty'}), headers: {'Content-Type': 'application/json'});
-      }
+      final body = await request.readAsString();
+      final data = jsonDecode(body);
+
+      Map<String, dynamic> receipt;
       
-      final body = jsonDecode(content);
-      final receiptId = body['receipt_id'];
-      if (receiptId == null) {
-        return Response.badRequest(body: jsonEncode({'message': 'receipt_id is required'}));
+      // If receiptId is provided, use existing receipt. Otherwise, create a new one.
+      if (data['receiptId'] != null) {
+        final id = int.tryParse(data['receiptId'].toString());
+        if (id == null) throw Exception('Invalid receiptId');
+        
+        final existingReceipt = await receiptService.getById(id);
+        if (existingReceipt == null) throw Exception('Receipt not found');
+        receipt = existingReceipt;
+      } else {
+        // Create a new receipt
+        receipt = await receiptService.createReceipt(data);
       }
 
-      // In a real app, you'd fetch the receipt to get the amount
-      // For now, we'll assume the client might pass it or we fetch it from receiptService
-      // Let's try to fetch it to be safe
-      // Note: We need to handle the case where receiptId is String or int
-      final id = int.tryParse(receiptId.toString());
-      if (id == null) {
-        return Response.badRequest(body: jsonEncode({'message': 'Invalid receipt_id'}));
+      final receiptId = receipt['id'].toString();
+      final double total = (receipt['total'] as num).toDouble();
+
+      // 2. Get IP Address
+      String ipAddr = '127.0.0.1';
+      final connectionInfo = request.context['shelf.io.connection_info'] as HttpConnectionInfo?;
+      if (connectionInfo != null) {
+        ipAddr = connectionInfo.remoteAddress.address;
       }
 
-      // Mock fetching receipt data (in real app, use receiptService)
-      // For this implementation, let's assume we get it from the request for simplicity of the test
-      // but ideally we should fetch from DB.
-      final amount = body['amount']?.toDouble();
-      if (amount == null) {
-        return Response.badRequest(body: jsonEncode({'message': 'amount is required'}));
-      }
-
-      final ipAddress = request.context['shelf.io.connection_info'] != null 
-          ? (request.context['shelf.io.connection_info'] as dynamic).remoteAddress.address 
-          : '127.0.0.1';
-
+      // 3. Generate VNPay URL
+      final returnUrl = data['returnUrl'] ?? 'http://localhost:8080/api/v1/vnpay/return';
+      
       final paymentUrl = vnpayService.createPaymentUrl(
-        orderId: id.toString(),
-        amount: amount,
-        orderInfo: 'Thanh toan don hang $id',
-        ipAddress: ipAddress,
+        amount: total, // Using the receipt total
+        orderInfo: 'Thanh toan don hang #$receiptId',
+        txnRef: receiptId,
+        returnUrl: returnUrl,
+        ipAddr: ipAddr,
       );
 
-      return Response.ok(jsonEncode({
-        'status': 'success',
-        'payment_url': paymentUrl
-      }), headers: {'Content-Type': 'application/json'});
+      return Response.ok(
+        jsonEncode({
+          'status': 'success',
+          'data': {
+            'paymentUrl': paymentUrl,
+            'receiptId': receiptId,
+            'total': total
+          }
+        }),
+        headers: {'Content-Type': 'application/json'},
+      );
     } catch (e) {
-      return Response.internalServerError(body: jsonEncode({'status': 'error', 'message': e.toString()}));
+      return Response.badRequest(
+        body: jsonEncode({'status': 'error', 'message': e.toString()}),
+        headers: {'Content-Type': 'application/json'},
+      );
     }
   }
 
   Future<Response> vnpayReturn(Request request) async {
-    final params = request.url.queryParameters;
-    final isValid = vnpayService.verifyHash(params);
+    try {
+      final params = request.url.queryParameters;
+      
+      if (!vnpayService.verifyHash(params)) {
+        return Response.forbidden(
+          jsonEncode({'status': 'error', 'message': 'Invalid signature'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
 
-    if (isValid) {
-      final responseCode = params['vnp_ResponseCode'];
+      final vnpResponseCode = params['vnp_ResponseCode'];
       final receiptId = int.tryParse(params['vnp_TxnRef'] ?? '');
 
-      if (responseCode == '00') {
-        if (receiptId != null) {
-          try {
-            await receiptService.markAsPaid(receiptId);
-          } catch (e) {
-            print('Error updating receipt $receiptId: $e');
-          }
-        }
-        return Response.ok(jsonEncode({'status': 'success', 'message': 'Payment successful'}));
+      if (vnpResponseCode == '00' && receiptId != null) {
+        // Payment successful
+        await receiptService.markAsPaid(receiptId);
+        return Response.ok(
+          jsonEncode({'status': 'success', 'message': 'Payment successful', 'receiptId': receiptId}),
+          headers: {'Content-Type': 'application/json'},
+        );
       } else {
-        return Response.ok(jsonEncode({'status': 'failed', 'message': 'Payment failed with code $responseCode'}));
+        return Response.ok(
+          jsonEncode({'status': 'fail', 'message': 'Payment failed or cancelled', 'code': vnpResponseCode}),
+          headers: {'Content-Type': 'application/json'},
+        );
       }
-    } else {
-      return Response.badRequest(body: jsonEncode({'status': 'error', 'message': 'Invalid signature'}));
+    } catch (e) {
+      return Response.internalServerError(
+        body: jsonEncode({'status': 'error', 'message': e.toString()}),
+        headers: {'Content-Type': 'application/json'},
+      );
     }
   }
 
+  // IPN is for server-to-server notification
   Future<Response> vnpayIpn(Request request) async {
-    final params = request.url.queryParameters;
-    final isValid = vnpayService.verifyHash(params);
-
-    if (!isValid) {
-      return Response.ok(jsonEncode({'RspCode': '97', 'Message': 'Invalid signature'}));
-    }
-
     try {
+      final params = request.url.queryParameters;
+      
+      if (!vnpayService.verifyHash(params)) {
+        return Response.ok(jsonEncode({'RspCode': '97', 'Message': 'Invalid signature'}));
+      }
+
+      final vnpResponseCode = params['vnp_ResponseCode'];
       final receiptId = int.tryParse(params['vnp_TxnRef'] ?? '');
-      final responseCode = params['vnp_ResponseCode'];
 
       if (receiptId == null) {
         return Response.ok(jsonEncode({'RspCode': '01', 'Message': 'Order not found'}));
       }
 
-      if (responseCode == '00') {
-        // Update receipt status in DB
+      if (vnpResponseCode == '00') {
         await receiptService.markAsPaid(receiptId);
-        return Response.ok(jsonEncode({'RspCode': '00', 'Message': 'Confirm Success'}));
-      } else {
-        return Response.ok(jsonEncode({'RspCode': '00', 'Message': 'Confirm Success (Payment Failed)'}));
       }
+
+      return Response.ok(jsonEncode({'RspCode': '00', 'Message': 'Confirm Success'}));
     } catch (e) {
       return Response.ok(jsonEncode({'RspCode': '99', 'Message': 'Unknown error'}));
     }

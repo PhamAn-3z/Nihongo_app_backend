@@ -9,6 +9,11 @@ class ReceiptRepository {
     return await supabase.from('Receipt').select().eq('user_id', userId);
   }
 
+  Future<Map<String, dynamic>?> getReceiptById(int id) async {
+    final response = await supabase.from('Receipt').select().eq('id', id).maybeSingle();
+    return response;
+  }
+
   Future<Map<String, dynamic>> createReceipt(Map<String, dynamic> data) async {
     return await supabase.from('Receipt').insert(data).select().single();
   }

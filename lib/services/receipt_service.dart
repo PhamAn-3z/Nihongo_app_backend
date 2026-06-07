@@ -17,6 +17,10 @@ class ReceiptService {
     return await receiptRepository.getReceiptsByUserId(userId);
   }
 
+  Future<Map<String, dynamic>?> getById(int id) async {
+    return await receiptRepository.getReceiptById(id);
+  }
+
   Future<Map<String, dynamic>> createReceipt(Map<String, dynamic> data) async {
     // 1. Validate basic required fields
     final requiredFields = ['user_id', 'membershipId', 'paymentMethod'];
