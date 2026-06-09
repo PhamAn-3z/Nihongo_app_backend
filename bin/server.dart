@@ -95,6 +95,7 @@ void main() async {
 
   // Mount các sub-routes
   router.mount('/api/v1/auth', authRoutes(authController));
+  router.mount('/api/v1/user/', userRoutes(userController));
   router.mount('/api/v1/memberships', membershipRoutes(membershipController));
   router.mount('/api/v1/promo-codes', promoCodeRoutes(promoCodeController));
   router.mount('/api/v1/receipts', receiptRoutes(receiptController));
@@ -118,7 +119,7 @@ void main() async {
   });
 
   // 5. Route được bảo vệ (Yêu cầu JWT Token)
-  router.get('/api/v1/profile', (Request request) {
+  router.get('/api/v1/user/profile', (Request request) {
     return Response.ok(
       jsonEncode({"message": "Chào mừng! Bạn đã truy cập được vào dữ liệu yêu cầu bảo mật."}),
       headers: {'content-type': 'application/json'},
@@ -133,7 +134,9 @@ void main() async {
     return (Request request) {
       if (request.url.path.startsWith('api/v1/profile') ||
           request.url.path.startsWith('api/v1/stats') ||
-          request.url.path.startsWith('api/v1/receipts')) {
+          request.url.path.startsWith('api/v1/receipts')||
+          request.url.path.contains('api/v1/user') ||
+          request.url.path.endsWith('auth/logout')) {
         return authMiddleware()(innerHandler)(request);
       }
 
