@@ -40,11 +40,12 @@ import 'package:flashcard_quiz_backend/controllers/vnpay_controller.dart';
 
 
 import 'package:flashcard_quiz_backend/middlewares/auth_middleware.dart';
+import 'package:flashcard_quiz_backend/middlewares/cors_middleware.dart';
 
 void main() async {
   // 1. Cấu hình kết nối Supabase
   final String supabaseUrl = 'https://xdekwfqnhrohydgejhdk.supabase.co';
-  final String supabaseKey = 'sb_publishable_Mk288brWkRYpm14YH2xAOw_sAb6qcyW';
+  final String supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkZWt3ZnFuaHJvaHlkZ2VqaGRrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzNjk1NTIsImV4cCI6MjA5NDk0NTU1Mn0.entE4M0y_37r-PuUrZ-YO879QMfuMGQJe-S8QrYRU-4';
 
   final supabaseClient = SupabaseClient(supabaseUrl, supabaseKey);
   print('🔌 Đang thiết lập kết nối đến Supabase Cloud...');
@@ -127,17 +128,18 @@ void main() async {
   // 6. Cấu hình Middleware Pipeline
   final handler = Pipeline()
       .addMiddleware(logRequests())
+      .addMiddleware(corsMiddleware()) // <-- thêm lại CORS
       .addMiddleware((Handler innerHandler) {
-        return (Request request) {
-          // Áp dụng authMiddleware cho các path cụ thể
-          if (request.url.path.startsWith('api/v1/profile') ||
-              request.url.path.startsWith('api/v1/stats') ||
-              request.url.path.startsWith('api/v1/receipts')) {
-            return authMiddleware()(innerHandler)(request);
-          }
-          return innerHandler(request);
-        };
-      })
+    return (Request request) {
+      if (request.url.path.startsWith('api/v1/profile') ||
+          request.url.path.startsWith('api/v1/stats') ||
+          request.url.path.startsWith('api/v1/receipts')) {
+        return authMiddleware()(innerHandler)(request);
+      }
+
+      return innerHandler(request);
+    };
+  })
       .addHandler(router);
 
   // 6. Khởi chạy Server
