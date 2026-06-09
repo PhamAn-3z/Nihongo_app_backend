@@ -20,6 +20,7 @@ import 'package:flashcard_quiz_backend/services/receipt_service.dart';
 import 'package:flashcard_quiz_backend/services/user_stats_service.dart';
 
 import 'package:flashcard_quiz_backend/controllers/auth_controller.dart';
+import 'package:flashcard_quiz_backend/controllers/user_controller.dart';
 import 'package:flashcard_quiz_backend/controllers/membership_controller.dart';
 import 'package:flashcard_quiz_backend/controllers/promo_code_controller.dart';
 import 'package:flashcard_quiz_backend/controllers/receipt_controller.dart';
@@ -27,6 +28,7 @@ import 'package:flashcard_quiz_backend/controllers/user_stats_controller.dart';
 
 
 import 'package:flashcard_quiz_backend/routes/auth_routes.dart';
+import 'package:flashcard_quiz_backend/routes/user_routes.dart';
 import 'package:flashcard_quiz_backend/routes/membership_routes.dart';
 import 'package:flashcard_quiz_backend/routes/promo_code_routes.dart';
 import 'package:flashcard_quiz_backend/routes/receipt_routes.dart';
@@ -52,13 +54,14 @@ void main() async {
 
   // 2. Khởi tạo các thành phần (Dependency Injection)
   final userRepository = UserRepository(supabaseClient);
+  final authService = AuthService(userRepository);
+
   final membershipRepository = MembershipRepository(supabaseClient);
   final promoCodeRepository = PromoCodeRepository(supabaseClient);
   final receiptRepository = ReceiptRepository(supabaseClient);
   final userStatsRepository = UserStatsRepository(supabaseClient);
 
   // Services
-  final authService = AuthService(userRepository);
   final membershipService = MembershipService(membershipRepository);
   final promoCodeService = PromoCodeService(promoCodeRepository);
   final receiptService = ReceiptService(
@@ -71,6 +74,7 @@ void main() async {
 
   // Controllers
   final authController = AuthController(authService);
+  final userController = UserController(userRepository);
   final membershipController = MembershipController(membershipService);
   final promoCodeController = PromoCodeController(promoCodeService);
   final receiptController = ReceiptController(receiptService);
