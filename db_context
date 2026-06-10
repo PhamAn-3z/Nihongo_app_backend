@@ -113,10 +113,9 @@ CREATE TABLE public.folders (
 CREATE TABLE public.decks (
   deck_id integer NOT NULL DEFAULT nextval('decks_deck_id_seq'::regclass),
   user_id integer,
-  is_public boolean,
-  is_visible boolean,
   title character varying,
   created_at timestamp without time zone DEFAULT now(),
+  public_status character varying DEFAULT 'private'::character varying,
   CONSTRAINT decks_pkey PRIMARY KEY (deck_id),
   CONSTRAINT decks_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(user_id)
 );
