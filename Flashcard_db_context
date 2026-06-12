@@ -1,0 +1,39 @@
+
+DB Explaination:
+Table: roles -> Chứa các role của user
+
+Table: users -> Bảng lõi lưu trữ thông tin tài khoản đăng nhập của người học
+
+Table: Decks -> Là bộ bài chứa nhiều flashcards thiết kế theo kiến trúc Ma trận đa chiều (Matrix-based Flashcard System). Đây là tầng cao nhất, đóng vai trò như một chiếc hộp lớn để gom nhóm toàn bộ nội dung học tập lại theo chủ đề.
+ - user_id: Xác định ai là tác giả tạo ra bộ đề này.
+ - public_status: Quản lý trạng thái chia sẻ 'public', 'private', hoặc 'hidden'.
+ - parent_id: Một Bộ đề lớn có thể chứa các Bộ đề con bên trong. thuộc tính này lưu chính cái ID của bộ đề cha. Nếu một bộ đề là bộ đề độc lập lớn nhất (Thư mục gốc), cột parent_id của nó sẽ mang giá trị NULL.
+
+Table: groups -> Đại diện cho các HÀNG thuộc tính. Ví dụ thực tế: Nếu bạn học tiếng Nhật, bạn có thể tạo 4 hàng (groups): Hàng 1 là Chữ Kanji, Hàng 2 là Cách đọc Hiragana, Hàng 3 là Âm Hán Việt, Hàng 4 là Nghĩa tiếng Việt.
+ - group_name: lưu tên của Hàng. Ví dụ: Hàng 1 có tên là "Chữ Kanji", Hàng 2 có tên là "Cách đọc Hiragana", ...
+ - position: dùng để sắp xếp thứ tự ưu tiên của các hàng từ trên xuống dưới. Số thứ tự vật lý gốc.
+
+Table:positions -> Đại diện cho các CỘT / các flashcards. Định nghĩa vị trí của từng thực thể từ vựng trong bộ đề. Bản chất mỗi một position_id tương đương với một tấm thẻ Flashcard vật lý
+ - col_index:  giúp định vị số thứ tự của thẻ trong ma trận.
+
+Table terms: Ô Giao Điểm Chứa Nội Dung Thực Tế: Bảng này hoạt động chính xác như một ô (cell) trong bảng tính Excel. Nó nằm ở tọa độ giao điểm của một Hàng (group_id) và một Cột (position_id).
+ - content: để ở kiểu dữ liệu jsonb cho phép lưu trữ động văn bản, ảnh và âm thanh (Ví dụ cấu trúc lưu trữ: {"text": "魚", "image_url": "https://...", "audio_url": "https://..."}).
+
+Table: user_decks -> Theo dõi mối quan hệ giữa người dùng và bộ đề. Chỉ được thêm khi người dùng tạo mới bộ đề hoặc lưu bộ đề.
+ - is_favorite: lưu trạng thái đánh dấu yêu thích -> làm tính năng "yêu thích".
+ - last_studied_at: lưu thời gian vào học gần nhất -> dùng để sắp xếp theo thời gian.
+
+Table: flashcard_study_logs: Bảng nhật ký học tập thống kê chi tiết theo dòng thời gian. Dữ liệu được tích lũy ngầm ở Frontend trong suốt quá trình học và chỉ được Backend thực hiện câu lệnh INSERT tạo mới một dòng duy nhất khi người dùng kết thúc hoặc thoát khỏi phiên học (Session-based logging) -> Giúp vẽ biểu đồ cột tần suất học tập tuần/tháng và tính toán chuỗi ngày học liên tiếp (Streak) giống như Quizlet/Duolingo mà không gây quá tải Database. Gánh vác luôn toàn bộ tính năng "Vừa học gần đây" (Recently Viewed).
+ - duration_seconds: đây là thời gian học của người dùng
+ - cards_reviewed:Là số lượng thẻ bạn lật chỉ tính riêng trong phiên học đó
+ - cards_learned: Số từ bấm chọn "Đã thuộc lòng"
+
+Table: users_groups: Cá nhân hóa
+ - rank: Lưu thứ hạng, thứ tự hiển thị sắp xếp trên/dưới của hàng thuộc tính đó theo ý muốn cá nhân của từng người dùng -> Phục vụ tính năng 'Kéo thả, tùy chỉnh vị trí hiển thị màn hình học' bằng kỹ thuật sắp xếp chuỗi Lexicographical Ordering.
+
+Table: users_positions: Cá nhân hóa -> phương pháp Spaced Repetition sử dụng thuật toán SM-2.
+ - status: (Mặc định là NEW - Từ mới, LEARNING - Đang học, hoặc REVIEW - Cần ôn tập)
+ - ease_factor(hệ số dễ): Người dùng có thể tự setting hệ số dễ
+ - interval: là một con số nguyên (Integer) đại diện cho số NGÀY mà hệ thống cho phép người dùng "nghỉ ngơi" trước khi bắt họ phải ôn lại từ vựng đó.
+ - review_count: Là con số tích lũy trọn đời của một thẻ cụ thể.
+ - next_review: Ngày giờ chính xác mà thuật toán hẹn giờ bắt chiếc thẻ này phải xuất hiện lại trên màn hình để người dùng ôn tập trước khi họ kịp quên. Khi kết hợp với thuộc tính status thì sẽ có thể làm được thêm tính năng "xếp bài thông minh" Hệ thống sẽ bốc những từ trong ngăn REVIEW và LEARNING đã quá hạn hoặc đến hạn học của ngày hôm nay (next_review đến giờ) ra bắt bạn ôn trước. Điều này tuân thủ đúng nguyên tắc: Phải giữ lại kiến thức cũ sắp quên trước khi nạp thêm kiến thức mới. Sau khi đã giải quyết xong đống từ cũ sắp quên, hệ thống mới bắt đầu rút các từ trong ngăn NEW ra để giới thiệu cho bạn học

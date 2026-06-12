@@ -1,0 +1,273 @@
+I Tạo deck bằng bulk import
+
+1. Kiến trúc dữ liệu truyền lên (Request Payload)
+
+JSON
+{
+  "deckTitle": "Từ vựng Soumatome N3 - Chương 1",
+  "publicStatus": "public",
+  "parentId": null,
+  "headers": [
+    { "key": "kanji", "name": "Chữ Kanji", "position": 1 },
+    { "key": "hiragana", "name": "Cách đọc Hiragana", "position": 2 },
+    { "key": "meaning", "name": "Nghĩa tiếng Việt", "position": 3 }
+  ],
+  "rows": [
+    { "kanji": "魚", "hiragana": "さかな", "meaning": "Con cá" },
+    { "kanji": "犬", "hiragana": "いぬ", "meaning": "Con chó" }
+  ]
+}
+
+ 2. Quy trình 6 bước thực hiện trong Database (Database Flow)Khi API được kích hoạt, Backend bắt buộc phải xử lý tuần tự theo cơ chế Database Transaction (Nếu một bước lỗi, tất cả các bước trước đó phải được hoàn tác để tránh tạo ra bộ đề "rác").🔹 Bước 1: INSERT vào bảng Decks (Tạo chiếc hộp lớn)Hành động: Tạo mới 1 dòng dữ liệu.Các trường ghi vào: title = deckTitle, user_id = userId (Lấy từ JWT), public_status = publicStatus, parent_id = parentId.Mục đích: Khai sinh bộ đề và hứng về mã new_deck_id (Khóa chính tự động tăng) để làm điểm neo cho các bước tiếp theo.🔹 Bước 2: INSERT vào bảng user_decks (Xác lập quyền sở hữu)Hành động: Tạo mới 1 dòng dữ liệu.Các trường ghi vào: user_id = userId, deck_id = new_deck_id, is_favorite = false, last_studied_at = NOW().Mục đích: Ghi danh bộ đề này vào "Thư viện tổng" của tác giả.🔹 Bước 3: INSERT vào bảng groups (Dựng các hàng thuộc tính)Hành động: Chèn hàng loạt (Bulk Insert) các hàng thông tin dựa trên mảng headers.Các trường ghi vào: deck_id = new_deck_id, group_name = header.name, position = header.position.Mục đích: Định hình cấu trúc ma trận. Backend cần trả về một mảng chứa các group_id vừa tạo để lập bản đồ liên kết (Map<String, int> groupMap) khớp với các key tương ứng (kanji, hiragana, meaning).🔹 Bước 4: INSERT vào bảng users_groups (Cá nhân hóa thứ tự hàng)Hành động: Chèn hàng loạt dữ liệu cá nhân hóa giao diện hàng cho tác giả.Các trường ghi vào: user_id = userId, group_id = từng group_id ở Bước 3, rank = 'A', 'B', 'C'... (Sử dụng kỹ thuật sắp xếp chuỗi Lexicographical).Mục đích: Chuẩn bị sẵn sàng cho tính năng kéo thả thay đổi vị trí hiển thị hàng trên app Flutter.🔹 Bước 5: INSERT vào bảng positions (Tạo các cột / thẻ vật lý)Hành động: Chèn hàng loạt dữ liệu tương ứng với số lượng phần tử trong mảng rows.Các trường ghi vào: deck_id = new_deck_id, col_index = Chạy tăng dần từ 1, 2, 3... (Vì đây là bộ đề mới tinh).Mục đích: Định vị vị trí vật lý cho từng con chữ trong không gian ma trận và lấy về mảng danh sách các position_id vừa sinh ra.🔹 Bước 6: INSERT đồng thời vào bảng terms và users_positions (Đổ ruột & Thổi hồn bộ não SM-2)Backend sẽ chạy song song hai mảng dữ liệu để tối ưu hóa hiệu năng:Mảng 1 (Đổ vào bảng terms): Cầm cặp group_id và position_id tương ứng ghép với chữ nghĩa thực tế từ file Excel $\rightarrow$ Đóng gói vào trường content dưới dạng jsonb ({"text": "...", "image_url": null, "audio_url": null}).Mảng 2 (Đổ vào bảng users_positions): Cầm userId kết hợp với từng position_id để kích hoạt trạng thái ghi nhớ mặc định ban đầu:status = 'NEW'ease_factor = 2.5interval = 0review_count = 0next_review = NOW() (Sẵn sàng để hiện lên học ngay lập tức).
+ 3. OUTPUT
+ {
+   "success": true,
+   "message": "Khởi tạo bộ đề và cấu hình lộ trình học cá nhân hóa thành công!",
+   "data": {
+     "deckId": 88,
+     "title": "Từ vựng Soumatome N3 - Chương 1",
+     "totalCardsImported": 120
+   }
+ }
+
+ II Liệt kê danh sách các decks của user.
+ Bước 1: INPUT (Dữ liệu đầu vào của API)
+ Header: Authorization: Bearer <JWT_TOKEN>
+ Bước 2: QUÁ TRÌNH TRUY VẤN DATABASE (SQL Query)
+ Để lấy ra toàn bộ các bộ đề thuộc sở hữu hoặc đã lưu của User, bạn cần thực hiện một câu lệnh JOIN chính xác giữa bảng user_decks và Decks.
+
+ Điểm cốt lõi tránh lỗi: Bạn bắt buộc phải lấy toàn bộ danh sách phẳng của tất cả các bộ đề về trước (bao gồm cả bộ đề cha và bộ đề con), sau đó mới dùng Code để dựng cây. Tuyệt đối không dùng SQL lọc WHERE parent_id IS NULL ngay từ đầu, nếu không bạn sẽ bị mất sạch các bộ đề con!
+ Câu lệnh SQL
+ SELECT
+     d.deck_id,
+     d.title,
+     d.parent_id,
+     d.public_status,
+     ud.is_favorite,
+     ud.last_studied_at
+ FROM public.user_decks ud
+ JOIN public.decks d ON ud.deck_id = d.deck_id
+ WHERE ud.user_id = [userId_ép_kiểu_số_nguyên]
+ ORDER BY d.parent_id ASC NULLS FIRST, d.title ASC;
+ Bước 3: THUẬT TOÁN DỰNG CÂY ANKI (Logic Xử lý ở Backend)
+ Sau khi nhận được danh sách phẳng từ DB, Backend (Node.js/Dart) cần chạy một thuật toán sử dụng cấu trúc dữ liệu Map/Dictionary để nhóm các bộ đề con vào bộ đề cha của chúng dựa trên parent_id. Điều này giúp Frontend nhận được một cục JSON phân cấp hoàn chỉnh mà không cần tốn tài nguyên chạy vòng lặp xử lý.
+ Bước 4: OUTPUT (Dữ liệu trả về cho Frontend Flutter)
+ Kết quả trả về sẽ mang mã trạng thái 200 OK cùng một cấu trúc mảng lồng nhau (Nested Array) cực kỳ tường minh.
+
+ JSON
+ {
+   "success": true,
+   "message": "Lấy danh sách cây bộ đề Anki thành công!",
+   "data": [
+     {
+       "deckId": 1,
+       "title": "Tiếng Nhật N3 Soumatome",
+       "parentId": null,
+       "publicStatus": "public",
+       "isFavorite": true,
+       "lastStudiedAt": "2026-06-12T07:00:00Z",
+       "subDecks": [
+         {
+           "deckId": 3,
+           "title": "Từ vựng - Chương 1",
+           "parentId": 1,
+           "publicStatus": "private",
+           "isFavorite": false,
+           "lastStudiedAt": "2026-06-11T15:30:00Z",
+           "subDecks": []
+         },
+         {
+           "deckId": 4,
+           "title": "Ngữ pháp - Tuần 1",
+           "parentId": 1,
+           "publicStatus": "public",
+           "isFavorite": false,
+           "lastStudiedAt": null,
+           "subDecks": []
+         }
+       ]
+     },
+     {
+       "deckId": 2,
+       "title": "Tiếng Anh Chuyên Ngành IT",
+       "parentId": null,
+       "publicStatus": "private",
+       "isFavorite": false,
+       "lastStudiedAt": "2026-06-10T02:15:00Z",
+       "subDecks": []
+     }
+   ]
+ }
+ Lưu ý chí mạng cho Frontend (Flutter) để giao diện không lỗi
+ Khi Backend đã trả ra cục JSON phân cấp dạng cây hoàn chỉnh này, các bạn Frontend làm UI chỉ cần tuân theo quy tắc:
+
+ Dùng một Widget hiển thị danh sách động (ListView.builder).
+
+ Với mỗi item, kiểm tra mảng subDecks. Nếu subDecks.isNotEmpty, hãy bọc nó trong một Widget có khả năng đóng/mở như ExpansionTile trong Flutter.
+
+ Khi người dùng bấm vào mũi tên xổ xuống, chỉ cần duyệt mảng subDecks bên trong để render ra các dòng con thụt lề (Padding left).
+
+ III Để xây dựng API lấy toàn bộ thông tin dùng để học tập khi người dùng click vào một Deck, chúng ta phải giải quyết bài toán cốt lõi: Gom toàn bộ cấu trúc Ma trận đa chiều (Hàng, Cột, Ô nội dung) và trộn dữ liệu Cá nhân hóa hiển thị (users_groups) lẫn thuật toán bộ não SM-2 (users_positions) vào làm một.
+ Bước 1: INPUT (Dữ liệu đầu vào)API này cần biết chính xác Ai đang học và học Bộ đề nào.Header: Authorization: Bearer <JWT_TOKEN> -> Giải mã lấy số nguyên userId.
+ Bước 2: QUÁ TRÌNH TRUY VẤN DATABASE (SQL Query tối ưu)
+ Để tránh việc gọi quá nhiều câu lệnh SELECT làm chậm Server, chúng ta sẽ gom logic thành 2 luồng truy vấn chính (Một luồng lấy cấu trúc Hàng cá nhân hóa, một luồng lấy nội dung Ô kèm thuật toán SM-2).
+
+ 📊 Luồng 1: Lấy danh sách các HÀNG (groups) xếp theo thứ tự rank cá nhân hóa
+ Câu lệnh này giúp Frontend biết màn hình lật thẻ sẽ hiển thị thông tin nào trước, thông tin nào sau (ví dụ: Hiện Kanji trước hay hiện Nghĩa trước) dựa vào kỹ thuật sắp xếp chuỗi Lexicographical của users_groups.
+
+ SQL
+ SELECT
+     g.group_id,
+     g.group_name,
+     g.position AS physical_position,
+     COALESCE(ug.rank, 'M') AS personalized_rank
+ FROM public.groups g
+ LEFT JOIN public.users_groups ug ON g.group_id = ug.group_id AND ug.user_id = [userId]
+ WHERE g.deck_id = [deckId]
+ ORDER BY personalized_rank ASC;
+
+ 📊 Luồng 2: Lấy toàn bộ các THẺ (positions), các Ô (terms) và bộ não SM-2 tương ứng
+ Câu lệnh này bốc toàn bộ ruột gan của bộ đề ra, đồng thời đính kèm lịch hẹn giờ next_review và trạng thái status của từng thẻ để thuật toán "Xếp bài thông minh" vận hành ở Frontend hoặc Backend.
+
+ SQL
+ SELECT
+     p.position_id,
+     p.col_index,
+     COALESCE(up.status, 'NEW') AS sm2_status,
+     COALESCE(up.ease_factor, 2.50) AS sm2_ease_factor,
+     COALESCE(up.interval, 0) AS sm2_interval,
+     COALESCE(up.review_count, 0) AS sm2_review_count,
+     up.next_review AS sm2_next_review,
+
+     -- Gom toàn bộ các ô (cells) nội dung thuộc thẻ này thành một mảng JSON
+     json_agg(
+         json_build_object(
+             'term_id', t.term_id,
+             'group_id', t.group_id,
+             'content', t.content
+         )
+     ) AS cells
+ FROM public.positions p
+ LEFT JOIN public.users_positions up ON p.position_id = up.position_id AND up.user_id = [userId]
+ LEFT JOIN public.terms t ON p.position_id = t.position_id
+ WHERE p.deck_id = [deckId]
+ GROUP BY p.position_id, up.status, up.ease_factor, up.interval, up.review_count, up.next_review
+ ORDER BY
+     -- Áp dụng thuật toán xếp bài thông minh Anki trực tiếp trong SQL
+     CASE WHEN COALESCE(up.status, 'NEW') = 'REVIEW' THEN 1
+          WHEN COALESCE(up.status, 'NEW') = 'LEARNING' THEN 2
+          ELSE 3 END,
+     up.next_review ASC NULLS FIRST,
+     p.col_index ASC;
+
+     Bước 3: LOGIC XỬ LÝ VÀ ĐÓNG GÓI JSON (Backend Code)
+     Backend sau khi nhận kết quả từ 2 câu lệnh SQL trên sẽ đóng gói thành một cục cấu trúc dữ liệu duy nhất cực kỳ tường minh.
+
+     Nếu một thẻ (position_id) chưa từng được học bao giờ (trường sm2_next_review trả về null), Backend sẽ tự động gán ngày giờ hiện tại cho nó để Frontend biết rằng con bài này đã sẵn sàng để học.
+
+     Bước 4: OUTPUT (Dữ liệu trả về hoàn chỉnh cho Flutter)
+     Dữ liệu trả về đạt mã 200 OK. Cấu trúc dưới đây chứa trọn vẹn cả xương sườn ma trận lẫn các thông số cá nhân hóa của người học:
+
+     JSON
+     {
+       "success": true,
+       "message": "Tải dữ liệu học tập của bộ đề thành công!",
+       "data": {
+         "deckId": 12,
+         "title": "Tiếng Nhật Soumatome N3",
+         "userId": 123,
+
+         "personalizedHeaders": [
+           {
+             "groupId": 101,
+             "groupName": "Chữ Kanji",
+             "physicalPosition": 1,
+             "personalizedRank": "A"
+           },
+           {
+             "groupId": 103,
+             "groupName": "Nghĩa tiếng Việt",
+             "physicalPosition": 3,
+             "personalizedRank": "B"
+           },
+           {
+             "groupId": 102,
+             "groupName": "Cách đọc Hiragana",
+             "physicalPosition": 2,
+             "personalizedRank": "C"
+           }
+         ],
+
+         "flashcards": [
+           {
+             "positionId": 501,
+             "colIndex": 1,
+             "studyState": {
+               "status": "REVIEW",
+               "easeFactor": 2.6,
+               "interval": 4,
+               "reviewCount": 3,
+               "nextReview": "2026-06-12T05:00:00Z"
+             },
+             "cardData": [
+               { "termId": 901, "groupId": 101, "content": { "text": "魚", "image_url": "https://...", "audio_url": "https://..." } },
+               { "termId": 902, "groupId": 102, "content": { "text": "さかな", "image_url": null, "audio_url": null } },
+               { "termId": 903, "groupId": 103, "content": { "text": "Con cá", "image_url": null, "audio_url": null } }
+             ]
+           },
+           {
+             "positionId": 502,
+             "colIndex": 2,
+             "studyState": {
+               "status": "NEW",
+               "easeFactor": 2.5,
+               "interval": 0,
+               "reviewCount": 0,
+               "nextReview": "2026-06-12T08:34:55Z"
+             },
+             "cardData": [
+               { "termId": 904, "groupId": 101, "content": { "text": "犬", "image_url": null, "audio_url": null } },
+               { "termId": 905, "groupId": 102, "content": { "text": "いぬ", "image_url": null, "audio_url": null } },
+               { "termId": 906, "groupId": 103, "content": { "text": "Con chó", "image_url": null, "audio_url": null } }
+             ]
+           }
+         ]
+       }
+     }
+
+     Khi các bạn làm Frontend nhận được cục Output siêu chuẩn này, việc lập trình giao diện sẽ trở nên dễ dàng vô cùng:
+
+     Hiển thị thứ tự các dòng trên thẻ: Khi lật thẻ, Flutter chỉ cần chạy vòng lặp qua mảng personalizedHeaders. Thấy groupId nào đứng trước (ví dụ: 101 - Kanji mang rank A), nó sẽ tìm trong mảng cardData của thẻ đó phần tử có groupId: 101 để vẽ ra màn hình trước. Điều này giúp hiển thị đúng thứ tự kéo thả cá nhân hóa của user.
+
+     Luồng bốc bài học: Danh sách flashcards trả về đã được SQL sắp xếp sẵn: Thẻ đến hạn ôn tập (REVIEW, LEARNING) nhảy lên đầu, thẻ mới (NEW) xếp ở phía sau. Người dùng cứ thế bấm lật lần lượt từ phần tử đầu tiên đến phần tử cuối cùng của mảng mà không cần Frontend phải tốn công viết thuật toán lọc bài phức tạp nữa!
+
+     IV phương án Xóa vĩnh viễn (Hard Delete) deck kết hợp với tính năng ON DELETE CASCADE đã cấu hình ở tầng Database.
+     Bước 1: THIẾT KẾ INPUT & ROUTE API
+        API này mang tính chất phá hủy dữ liệu (Hủy diệt vĩnh viễn) nên bắt buộc phải sử dụng HTTP Method là DELETE và yêu cầu Authentication để kiểm tra quyền sở hữu bộ bài.
+
+        HTTP Method: DELETE
+
+        Headers:
+
+        HTTP
+        Authorization: Bearer <JWT_TOKEN_CỦA_USER>
+
+        Bước 2: LOGIC XỬ LÝ TRÊN BACKEND (Controller/Service)
+        Để tránh trường hợp User A lừa hệ thống để xóa bộ đề của User B (Lỗ hổng IDor), câu lệnh SQL bắt buộc phải kiểm tra đồng thời cả hai điều kiện: deck_id trùng khớp và tác giả tạo ra bộ đề (user_id) phải chính là người đang gửi request.
+
+        Bước 3: KỊCH BẢN KẾT NỐI VÀ XỬ LÝ TRÊN FRONTEND (Flutter UX)
+        Vì đây là hành động Xóa vĩnh viễn không thể đảo ngược, trên Frontend Flutter nhóm bạn cần thiết kế một luồng trải nghiệm (UX Flow) nghiêm ngặt để bảo vệ người học bấm nhầm:
+
+        Kích hoạt Confirm Dialog: Khi User nhấn vào nút "Xóa bộ đề" (Biểu tượng thùng rác), Flutter không được gọi API ngay, mà phải hiển thị một AlertDialog.
+
+        Yêu cầu xác nhận thủ công: Trong Dialog, bắt người dùng phải nhập chữ "XÓA" (hoặc tên chính xác của Bộ đề đó) vào một TextField. Nút "Xác nhận xóa vĩnh viễn" ban đầu sẽ bị Disable (Mờ đi) và chỉ Enable (Sáng lên) khi người dùng nhập đúng chuỗi ký tự yêu cầu.
+
+        Hiển thị hiệu ứng Loading: Khi user nhấn nút Xác nhận, hiển thị hiệu ứng xoay vòng (CircularProgressIndicator) để chặn user bấm liên tiếp nhiều lần gây nghẽn API.
+
+        Điều hướng an toàn sau khi xóa thành công: Sau khi API phản hồi success: true:
+
+        Đóng Popup xác nhận.
+
+        Sử dụng lệnh Navigator.pop(context) hoặc điều hướng đưa User về màn hình Thư viện tổng (My Library Screen).
+
+        Xóa bộ đề này khỏi danh sách quản lý trạng thái (State Management như Bloc/Provider/GetX) ở màn hình Thư viện để danh sách tự động cập nhật, biến mất mượt mà mà không cần phải load lại toàn bộ trang.

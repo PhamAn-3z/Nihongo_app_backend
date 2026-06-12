@@ -36,10 +36,13 @@ import 'package:flashcard_quiz_backend/routes/user_stats_routes.dart';
 import 'package:flashcard_quiz_backend/routes/vnpay_routes.dart';
 
 import 'package:flashcard_quiz_backend/services/vnpay_service.dart';
-
 import 'package:flashcard_quiz_backend/controllers/vnpay_controller.dart';
 
-
+// Import Decks
+import 'package:flashcard_quiz_backend/repositories/deck_repository.dart';
+import 'package:flashcard_quiz_backend/services/deck_service.dart';
+import 'package:flashcard_quiz_backend/controllers/deck_controller.dart';
+import 'package:flashcard_quiz_backend/routes/deck_routes.dart';
 
 import 'package:flashcard_quiz_backend/middlewares/auth_middleware.dart';
 import 'package:flashcard_quiz_backend/middlewares/cors_middleware.dart';
@@ -47,7 +50,7 @@ import 'package:flashcard_quiz_backend/middlewares/cors_middleware.dart';
 void main() async {
   // 1. Cấu hình kết nối Supabase
   final String supabaseUrl = 'https://xdekwfqnhrohydgejhdk.supabase.co';
-  final String supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkZWt3ZnFuaHJvaHlkZ2VqaGRrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzNjk1NTIsImV4cCI6MjA5NDk0NTU1Mn0.entE4M0y_37r-PuUrZ-YO879QMfuMGQJe-S8QrYRU-4';
+  final String supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkZWt3ZnFuaHJvaHlkZ2VqaGRrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3OTM2OTU1MiwiZXhwIjoyMDk0OTQ1NTUyfQ.xzmqvCs5TtZvAOrD3h2nwEpXgz6H_Ohy-TFBcO1vfd8';
 
   final supabaseClient = SupabaseClient(supabaseUrl, supabaseKey);
   print('🔌 Đang thiết lập kết nối đến Supabase Cloud...');
@@ -71,6 +74,10 @@ void main() async {
   );
   final userStatsService = UserStatsService(userStatsRepository);
   final vnpayService = VnPayService();
+  
+  // Deck Layer
+  final deckRepository = DeckRepository(supabaseClient);
+  final deckService = DeckService(deckRepository);
 
   // Controllers
   final authController = AuthController(authService);
@@ -80,6 +87,7 @@ void main() async {
   final receiptController = ReceiptController(receiptService);
   final userStatsController = UserStatsController(userStatsService);
   final vnpayController = VnPayController(vnpayService, receiptService);
+  final deckController = DeckController(deckService);
 
 
 
@@ -105,22 +113,7 @@ void main() async {
   router.mount('/api/v1/receipts', receiptRoutes(receiptController));
   router.mount('/api/v1/stats', userStatsRoutes(userStatsController));
   router.mount('/api/v1/vnpay', vnpayRoutes(vnpayController));
-
-  // 3. API Decks (Public)
-  router.get('/api/v1/decks', (Request request) async {
-    try {
-      final List<dynamic> response = await supabaseClient.from('decks').select();
-      return Response.ok(
-        jsonEncode({"status": "success", "data": response}),
-        headers: {'content-type': 'application/json'},
-      );
-    } catch (e) {
-      return Response.internalServerError(
-        body: jsonEncode({"status": "error", "message": "Lỗi kết nối DB: $e"}),
-        headers: {'content-type': 'application/json'},
-      );
-    }
-  });
+  router.mount('/api/v1/decks', deckRoutes(deckController));
 
   // 5. Route được bảo vệ (Yêu cầu JWT Token)
   router.get('/api/v1/user/profile', (Request request) {
@@ -139,6 +132,7 @@ void main() async {
       if (request.url.path.startsWith('api/v1/profile') ||
           request.url.path.startsWith('api/v1/stats') ||
           request.url.path.startsWith('api/v1/receipts')||
+          request.url.path.contains('api/v1/decks') ||
           request.url.path.contains('api/v1/user') ||
           request.url.path.endsWith('auth/logout')) {
         return authMiddleware()(innerHandler)(request);
