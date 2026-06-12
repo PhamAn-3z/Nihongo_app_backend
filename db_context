@@ -101,43 +101,27 @@ CREATE TABLE public.notification_settings (
   CONSTRAINT notification_settings_pkey PRIMARY KEY (id),
   CONSTRAINT notification_settings_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(user_id)
 );
-CREATE TABLE public.folders (
-  folder_id integer NOT NULL DEFAULT nextval('folders_folder_id_seq'::regclass),
-  user_id integer,
-  title character varying,
-  description text,
-  created_at timestamp without time zone DEFAULT now(),
-  CONSTRAINT folders_pkey PRIMARY KEY (folder_id),
-  CONSTRAINT folders_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(user_id)
-);
 CREATE TABLE public.decks (
   deck_id integer NOT NULL DEFAULT nextval('decks_deck_id_seq'::regclass),
   user_id integer,
   title character varying,
   created_at timestamp without time zone DEFAULT now(),
   public_status character varying DEFAULT 'private'::character varying,
+  parent_id integer,
   CONSTRAINT decks_pkey PRIMARY KEY (deck_id),
-  CONSTRAINT decks_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(user_id)
-);
-CREATE TABLE public.folder_decks (
-  folder_id integer NOT NULL,
-  deck_id integer NOT NULL,
-  CONSTRAINT folder_decks_pkey PRIMARY KEY (folder_id, deck_id),
-  CONSTRAINT folder_decks_folder_id_fkey FOREIGN KEY (folder_id) REFERENCES public.folders(folder_id),
-  CONSTRAINT folder_decks_deck_id_fkey FOREIGN KEY (deck_id) REFERENCES public.decks(deck_id)
+  CONSTRAINT decks_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(user_id),
+  CONSTRAINT decks_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES public.decks(deck_id)
 );
 CREATE TABLE public.folder_quizzes (
   folder_id integer NOT NULL,
   quiz_id integer NOT NULL,
   CONSTRAINT folder_quizzes_pkey PRIMARY KEY (folder_id, quiz_id),
-  CONSTRAINT folder_quizzes_folder_id_fkey FOREIGN KEY (folder_id) REFERENCES public.folders(folder_id),
   CONSTRAINT folder_quizzes_quiz_id_fkey FOREIGN KEY (quiz_id) REFERENCES public.quizzes(quiz_id)
 );
 CREATE TABLE public.groups (
   group_id integer NOT NULL DEFAULT nextval('groups_group_id_seq'::regclass),
   deck_id integer,
   group_name character varying,
-  type character varying,
   position integer,
   CONSTRAINT groups_pkey PRIMARY KEY (group_id),
   CONSTRAINT groups_deck_id_fkey FOREIGN KEY (deck_id) REFERENCES public.decks(deck_id)
@@ -154,7 +138,6 @@ CREATE TABLE public.positions (
   position_id integer NOT NULL DEFAULT nextval('positions_position_id_seq'::regclass),
   deck_id integer,
   col_index integer,
-  rank character varying NOT NULL DEFAULT 'M'::character varying,
   CONSTRAINT positions_pkey PRIMARY KEY (position_id),
   CONSTRAINT positions_deck_id_fkey FOREIGN KEY (deck_id) REFERENCES public.decks(deck_id)
 );
@@ -231,10 +214,22 @@ CREATE TABLE public.quiz_attempt_answers (
 CREATE TABLE public.user_decks (
   user_id integer NOT NULL,
   deck_id integer NOT NULL,
-  is_favorite boolean DEFAULT false,
   last_studied_at timestamp without time zone,
   created_at timestamp without time zone DEFAULT now(),
+  is_favorite boolean DEFAULT false,
   CONSTRAINT user_decks_pkey PRIMARY KEY (user_id, deck_id),
   CONSTRAINT fk_user_decks_user_id FOREIGN KEY (user_id) REFERENCES public.users(user_id),
   CONSTRAINT fk_user_decks_deck_id FOREIGN KEY (deck_id) REFERENCES public.decks(deck_id)
+);
+CREATE TABLE public.flashcard_study_logs (
+  log_id integer NOT NULL DEFAULT nextval('flashcard_study_logs_log_id_seq'::regclass),
+  user_id integer NOT NULL,
+  deck_id integer NOT NULL,
+  cards_learned integer DEFAULT 0,
+  cards_reviewed integer DEFAULT 0,
+  duration_seconds integer DEFAULT 0,
+  studied_at timestamp without time zone DEFAULT now(),
+  CONSTRAINT flashcard_study_logs_pkey PRIMARY KEY (log_id),
+  CONSTRAINT fk_study_logs_user_id FOREIGN KEY (user_id) REFERENCES public.users(user_id),
+  CONSTRAINT fk_study_logs_deck_id FOREIGN KEY (deck_id) REFERENCES public.decks(deck_id)
 );
