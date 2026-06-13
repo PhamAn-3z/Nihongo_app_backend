@@ -147,5 +147,5 @@ void main() async {
   final port = int.parse(Platform.environment['PORT'] ?? '8080');
   final server = await shelf_io.serve(handler, InternetAddress.anyIPv4, port);
 
-  print('🚀 SERVER ĐANG CHẠY TẠI: http://${server.address.host}:${server.port}');
+  print(' SERVER ĐANG CHẠY TẠI: http://${server.address.host}:${server.port}');
 }

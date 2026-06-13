@@ -154,4 +154,45 @@ class DeckController {
       );
     }
   }
+
+  Future<Response> favoriteDeck(Request request) async {
+    return _handleFavorite(request, true);
+  }
+
+  Future<Response> unfavoriteDeck(Request request) async {
+    return _handleFavorite(request, false);
+  }
+
+  Future<Response> _handleFavorite(Request request, bool isFavorite) async {
+    try {
+      final payload = request.context['authPayload'] as Map<String, dynamic>?;
+      if (payload == null || payload['userId'] == null) {
+        return Response.forbidden(jsonEncode({'message': 'Unauthorized'}));
+      }
+
+      final dynamic userId = payload['userId'];
+      final String? deckIdStr = request.params['id'];
+
+      if (deckIdStr == null) {
+        return Response.badRequest(body: jsonEncode({'message': 'Missing deck ID'}));
+      }
+
+      final int deckId = int.parse(deckIdStr);
+      await _deckService.setFavoriteStatus(deckId, userId, isFavorite);
+
+      return Response.ok(
+        jsonEncode({
+          "success": true,
+          "message": isFavorite ? "Đã thêm vào danh sách yêu thích!" : "Đã xóa khỏi danh sách yêu thích!"
+        }),
+        headers: {'content-type': 'application/json'},
+      );
+    } catch (e) {
+      // Trả về lỗi 400 như tài liệu yêu cầu nếu chưa lưu bộ đề
+      return Response(400,
+        body: jsonEncode({"success": false, "message": e.toString()}),
+        headers: {'content-type': 'application/json'},
+      );
+    }
+  }
 }

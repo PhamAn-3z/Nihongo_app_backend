@@ -195,4 +195,19 @@ class DeckRepository {
       throw Exception('Không tìm thấy bộ đề hoặc bạn không có quyền xóa bộ đề này.');
     }
   }
+
+  Future<void> updateFavoriteStatus(int deckId, int userId, bool isFavorite) async {
+    // Sử dụng UPDATE để đánh dấu yêu thích
+    // Bắt buộc bản ghi phải tồn tại trong user_decks (nghĩa là user đã lưu hoặc là chủ sở hữu)
+    final response = await _client
+        .from('user_decks')
+        .update({'is_favorite': isFavorite})
+        .eq('user_id', userId)
+        .eq('deck_id', deckId)
+        .select();
+
+    if ((response as List).isEmpty) {
+      throw Exception('Hành động không hợp lệ! Bạn phải lưu bộ đề này vào thư viện trước khi đánh dấu yêu thích.');
+    }
+  }
 }

@@ -271,3 +271,21 @@ JSON
         Sử dụng lệnh Navigator.pop(context) hoặc điều hướng đưa User về màn hình Thư viện tổng (My Library Screen).
 
         Xóa bộ đề này khỏi danh sách quản lý trạng thái (State Management như Bloc/Provider/GetX) ở màn hình Thư viện để danh sách tự động cập nhật, biến mất mượt mà mà không cần phải load lại toàn bộ trang.
+
+Phần V:  favorite àn unfavorite
+1. PHƯƠNG ÁN XỬ LÝ TRÊN FRONTEND FLUTTERTrên Frontend, nút Yêu thích (Ngôi sao/Trái tim) sẽ không được hiển thị bừa bãi. Nó chỉ xuất hiện dựa trên trạng thái sở hữu của người dùng đối với bộ đề đó.🛠️ Luồng kiểm tra điều kiện (UI Logic)Khi người dùng vào màn hình chi tiết của một bộ đề (Deck Detail Screen), ứng dụng Flutter sẽ kiểm tra trường user_id (Tác giả của bộ đề) hoặc kiểm tra xem bộ đề này có nằm trong danh sách thư viện cá nhân của họ hay không:Kịch bản A (Bộ đề của chính User hoặc bộ đề ĐÃ lưu):Điều kiện: deck.user_id == currentUserId HOẶC bộ đề đã tồn tại trong bảng user_decks.UI: Hiển thị nút Yêu thích. Người dùng có toàn quyền bật/tắt ngôi sao vàng.Kịch bản B (Bộ đề công khai trên Chợ cộng đồng - CHƯA lưu):Điều kiện: deck.user_id != currentUserId VÀ chưa có bản ghi trong bảng user_decks.UI: Ẩn hoàn toàn nút Yêu thích, thay thế bằng một nút lớn: "Lưu vào thư viện để học" (Nút này khi bấm sẽ gọi API tạo quan hệ trong bảng user_decks). Khi họ bấm lưu xong, nút Yêu thích mới được kích hoạt hiển thị.⚙️ 2. PHƯƠNG ÁN XỬ LÝ TRÊN BACKEND (Lớp phòng thủ chống lỗi)Mặc dù Frontend đã giấu nút, nhưng để phòng trường hợp có người dùng cố tình dùng các công cụ như Postman để "bắn phá" API, hoặc do Frontend bị lỗi thiết kế (Lọt lưới UI), Backend bắt buộc phải xử lý đơn giản nhưng cực kỳ nghiêm ngặt bằng câu lệnh UPDATE có điều kiện.Thay vì dùng câu lệnh UPSERT (tự đẻ dòng mới) như phương án trước, Backend lúc này sẽ chuyển sang dùng câu lệnh UPDATE thuần túy.🔹 Logic API Favorite lúc này ở Backend:Khi nhận được request POST /api/v1/decks/:deck_id/favorite, Backend sẽ chạy câu lệnh SQL sau:SQLUPDATE public.user_decks
+        SET is_favorite = true
+        WHERE user_id = [userId] AND deck_id = [deckId];
+        🛡️ Cơ chế chống lỗi của câu lệnh này:Nếu bộ đề ĐÃ ĐƯỢC LƯU: PostgreSQL tìm thấy dòng dữ liệu khớp với user_id và deck_id $\rightarrow$ Cập nhật is_favorite = true thành công $\rightarrow$ Trả về kết quả thành công cho Client.Nếu bộ đề CHƯA ĐƯỢC LƯU (Lỗi từ Frontend): Câu lệnh UPDATE trên sẽ chạy qua dữ liệu và không tìm thấy bất kỳ dòng nào thỏa mãn điều kiện. PostgreSQL sẽ không báo lỗi hệ thống sập nguồn, mà nó chỉ trả về số lượng dòng bị tác động là 0 (affected_rows = 0).🛠️ Đoạn code Backend mẫu xử lý phản hồi:JavaScriptconst { data, error, count } = await supabase
+          .from('user_decks')
+          .update({ is_favorite: true })
+          .eq('user_id', userId)
+          .eq('deck_id', deckId);
+
+        // 🚨 Lớp phòng thủ: Kiểm tra xem có dòng nào được cập nhật không
+        if (count === 0) {
+          return res.status(400).json({
+            success: false,
+            message: "Hành động không hợp lệ! Bạn phải lưu bộ đề này vào thư viện trước khi đánh dấu yêu thích."
+          });
+        }
