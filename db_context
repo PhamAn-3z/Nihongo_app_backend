@@ -233,3 +233,37 @@ CREATE TABLE public.flashcard_study_logs (
   CONSTRAINT fk_study_logs_user_id FOREIGN KEY (user_id) REFERENCES public.users(user_id),
   CONSTRAINT fk_study_logs_deck_id FOREIGN KEY (deck_id) REFERENCES public.decks(deck_id)
 );
+CREATE TABLE public.deck_comments (
+  comment_id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
+  deck_id integer NOT NULL,
+  user_id integer NOT NULL,
+  parent_comment_id integer,
+  content text NOT NULL CHECK (length(TRIM(BOTH FROM content)) > 0),
+  is_edited boolean NOT NULL DEFAULT false,
+  created_at timestamp without time zone NOT NULL DEFAULT now(),
+  updated_at timestamp without time zone NOT NULL DEFAULT now(),
+  CONSTRAINT deck_comments_pkey PRIMARY KEY (comment_id),
+  CONSTRAINT fk_comments_deck FOREIGN KEY (deck_id) REFERENCES public.decks(deck_id),
+  CONSTRAINT fk_comments_user FOREIGN KEY (user_id) REFERENCES public.users(user_id),
+  CONSTRAINT fk_comments_parent FOREIGN KEY (parent_comment_id) REFERENCES public.deck_comments(comment_id)
+);
+CREATE TABLE public.comment_likes (
+  user_id integer NOT NULL,
+  comment_id integer NOT NULL,
+  created_at timestamp without time zone NOT NULL DEFAULT now(),
+  CONSTRAINT comment_likes_pkey PRIMARY KEY (user_id, comment_id),
+  CONSTRAINT fk_likes_user FOREIGN KEY (user_id) REFERENCES public.users(user_id),
+  CONSTRAINT fk_likes_comment FOREIGN KEY (comment_id) REFERENCES public.deck_comments(comment_id)
+);
+CREATE TABLE public.comment_reports (
+  report_id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
+  comment_id integer NOT NULL,
+  reporter_id integer NOT NULL,
+  reason_type character varying NOT NULL,
+  additional_details text,
+  status character varying NOT NULL DEFAULT 'PENDING'::character varying,
+  created_at timestamp without time zone NOT NULL DEFAULT now(),
+  CONSTRAINT comment_reports_pkey PRIMARY KEY (report_id),
+  CONSTRAINT fk_reports_comment FOREIGN KEY (comment_id) REFERENCES public.deck_comments(comment_id),
+  CONSTRAINT fk_reports_reporter FOREIGN KEY (reporter_id) REFERENCES public.users(user_id)
+);
