@@ -20,9 +20,8 @@ Router deckRoutes(DeckController controller) {
   // Xóa bộ đề vĩnh viễn
   router.delete('/<id>', controller.deleteDeck);
 
-  // Yêu thích / Bỏ yêu thích
-  router.post('/<id>/favorite', controller.favoriteDeck);
-  router.post('/<id>/unfavorite', controller.unfavoriteDeck);
+  // Toggle Favorite (Bật/Tắt yêu thích)
+  router.patch('/<id>/toggle-favorite', controller.toggleFavorite);
 
   return router;
 }

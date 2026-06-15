@@ -155,15 +155,7 @@ class DeckController {
     }
   }
 
-  Future<Response> favoriteDeck(Request request) async {
-    return _handleFavorite(request, true);
-  }
-
-  Future<Response> unfavoriteDeck(Request request) async {
-    return _handleFavorite(request, false);
-  }
-
-  Future<Response> _handleFavorite(Request request, bool isFavorite) async {
+  Future<Response> toggleFavorite(Request request) async {
     try {
       final payload = request.context['authPayload'] as Map<String, dynamic>?;
       if (payload == null || payload['userId'] == null) {
@@ -172,10 +164,14 @@ class DeckController {
 
       final dynamic userId = payload['userId'];
       final String? deckIdStr = request.params['id'];
-
+      
       if (deckIdStr == null) {
         return Response.badRequest(body: jsonEncode({'message': 'Missing deck ID'}));
       }
+
+      // Đọc isFavorite từ body request
+      final body = jsonDecode(await request.readAsString());
+      final bool isFavorite = body['isFavorite'];
 
       final int deckId = int.parse(deckIdStr);
       await _deckService.setFavoriteStatus(deckId, userId, isFavorite);
@@ -183,14 +179,18 @@ class DeckController {
       return Response.ok(
         jsonEncode({
           "success": true,
-          "message": isFavorite ? "Đã thêm vào danh sách yêu thích!" : "Đã xóa khỏi danh sách yêu thích!"
+          "message": isFavorite ? "Đã thêm vào danh sách yêu thích!" : "Đã xóa khỏi danh sách yêu thích!",
+          "data": { "isFavorite": isFavorite }
         }),
         headers: {'content-type': 'application/json'},
       );
     } catch (e) {
-      // Trả về lỗi 400 như tài liệu yêu cầu nếu chưa lưu bộ đề
+      // Trả về lỗi 400 như tài liệu yêu cầu nếu bản ghi chưa tồn tại
       return Response(400,
-        body: jsonEncode({"success": false, "message": e.toString()}),
+        body: jsonEncode({
+          "success": false, 
+          "message": "Hành động không hợp lệ! Bạn phải lưu bộ đề này trước khi thay đổi trạng thái yêu thích."
+        }),
         headers: {'content-type': 'application/json'},
       );
     }
