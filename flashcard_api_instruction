@@ -284,3 +284,17 @@ Tôi đang phát triển hệ thống Flashcard dựa trên cơ sở dữ liệu
          6. Nếu thành công, trả về mã `200 OK` kèm cấu trúc JSON: {"success": true, "message": "...", "data": { "isFavorite": ... }}
 
          Hãy viết mã nguồn chi tiết, sạch sẽ và có bọc trong khối try-catch để bắt lỗi hệ thống.
+
+Phần VI: Lấy comment của deck
+Tôi đang làm phương án tách API cho màn hình tổng quan bộ đề trong ứng dụng Flashcard. Thông số Anki đã có sẵn từ trang trước truyền sang, bây giờ tôi chỉ cần một API độc lập để lấy danh sách bình luận (Comments) của bộ đề.
+
+         Hãy viết cho tôi hàm xử lý API bằng Node.js (JavaScript) kết nối với Supabase (PostgreSQL):
+         1. Method: GET. URL: /api/v1/decks/:deck_id/comments
+         2. Yêu cầu lấy dữ liệu từ bảng `public.deck_comments` lọc theo `deck_id` lấy từ `req.params`.
+         3. Cần JOIN với bảng `users` và `user_profiles` để bốc được `username` và `avatar_url` của tác giả viết comment đó.
+         4. Sử dụng câu lệnh SQL phụ (Subquery hoặc EXISTS) để trả về thêm 2 trường:
+            - `total_likes`: Tổng số lượt thích bình luận này từ bảng `comment_likes`.
+            - `isLikedByMe`: Kiểu boolean, kiểm tra xem `userId` đang đăng nhập (lấy từ `req.user.user_id`) đã thích comment này chưa.
+         5. Sắp xếp kết quả trả về theo `created_at DESC`.
+
+         Hãy viết mã nguồn sạch sẽ, bọc trong try-catch và phản hồi định dạng JSON chuẩn gồm success, message và data (mảng danh sách comment).

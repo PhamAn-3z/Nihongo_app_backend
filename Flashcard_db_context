@@ -37,3 +37,18 @@ Table: users_positions: Cá nhân hóa -> phương pháp Spaced Repetition sử 
  - interval: là một con số nguyên (Integer) đại diện cho số NGÀY mà hệ thống cho phép người dùng "nghỉ ngơi" trước khi bắt họ phải ôn lại từ vựng đó.
  - review_count: Là con số tích lũy trọn đời của một thẻ cụ thể.
  - next_review: Ngày giờ chính xác mà thuật toán hẹn giờ bắt chiếc thẻ này phải xuất hiện lại trên màn hình để người dùng ôn tập trước khi họ kịp quên. Khi kết hợp với thuộc tính status thì sẽ có thể làm được thêm tính năng "xếp bài thông minh" Hệ thống sẽ bốc những từ trong ngăn REVIEW và LEARNING đã quá hạn hoặc đến hạn học của ngày hôm nay (next_review đến giờ) ra bắt bạn ôn trước. Điều này tuân thủ đúng nguyên tắc: Phải giữ lại kiến thức cũ sắp quên trước khi nạp thêm kiến thức mới. Sau khi đã giải quyết xong đống từ cũ sắp quên, hệ thống mới bắt đầu rút các từ trong ngăn NEW ra để giới thiệu cho bạn học
+
+Table: deck_comments -> Cây bình luận phân cấp
+ - deck_id: Neo comment này vào bộ đề nào
+ - user_id: Ai là người viết
+ - parent_comment_id: Dùng để làm tính năng Reply
+ - content: Nội dung chữ
+ - is_edited: Dùng để cho biết người dùng đã chỉnh sửa comment chưa
+Table: comment_likes -> Bảng này xử lý hành vi "Thả tim/Thích" bình luận
+ - UNIQUE(user_id, comment_id): ràng buộc này đảm bảo một người chỉ được like bình luận đúng 1 lần duy nhất.
+
+Table: comment_reports -> Bảng này lưu những report tố cáo comment
+ - reporter_id: người nhấn nút tố cáo
+ - reason_type: Lý do vi phạm (SPAM, TOXIC, INCORRECT_KNOWLEDGE)
+ - status: Trạng thái xử lý của đơn hàng tố cáo. Mặc định luôn là 'PENDING' (Chờ duyệt). Sau này khi bạn làm trang Admin Dashboard, Admin bấm nút Xóa comment thì cập nhật thành 'RESOLVED_DELETED', nếu Admin thấy tố cáo bậy và bấm bỏ qua thì cập nhật thành 'RESOLVED_DISMISSED'
+ - UNIQUE(reporter_id, comment_id): ràng buộc này đảm bảo một người chỉ được gửi đơn tố cáo một bình luận đúng 1 lần duy nhất.
