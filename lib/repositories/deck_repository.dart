@@ -210,4 +210,23 @@ class DeckRepository {
       throw Exception('Hành động không hợp lệ! Bạn phải lưu bộ đề này vào thư viện trước khi đánh dấu yêu thích.');
     }
   }
+
+  Future<List<dynamic>> getDeckComments(int deckId) async {
+    // Truy vấn lấy comment, thông tin user và danh sách likes để tính toán ở Service
+    final response = await _client
+        .from('deck_comments')
+        .select('''
+          id,
+          content,
+          created_at,
+          user_id,
+          users:user_id (username),
+          user_profiles:user_id (avatar_url),
+          comment_likes (user_id)
+        ''')
+        .eq('deck_id', deckId)
+        .order('created_at', ascending: false);
+
+    return response as List<dynamic>;
+  }
 }

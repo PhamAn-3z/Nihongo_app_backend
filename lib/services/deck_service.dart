@@ -149,4 +149,26 @@ class DeckService {
     final int formattedUserId = userId is String ? int.parse(userId) : userId as int;
     await _deckRepository.updateFavoriteStatus(deckId, formattedUserId, isFavorite);
   }
+
+  Future<List<Map<String, dynamic>>> getDeckComments(int deckId, dynamic userId) async {
+    final int formattedUserId = userId is String ? int.parse(userId) : userId as int;
+    
+    final List<dynamic> rawComments = await _deckRepository.getDeckComments(deckId);
+
+    return rawComments.map((item) {
+      final List<dynamic> likes = item['comment_likes'] ?? [];
+      final user = item['users'] ?? {};
+      final profile = item['user_profiles'] ?? {};
+
+      return {
+        'id': item['id'],
+        'content': item['content'],
+        'createdAt': item['created_at'],
+        'username': user['username'] ?? 'Người dùng',
+        'avatarUrl': profile['avatar_url'],
+        'totalLikes': likes.length,
+        'isLikedByMe': likes.any((l) => l['user_id'] == formattedUserId),
+      };
+    }).toList();
+  }
 }

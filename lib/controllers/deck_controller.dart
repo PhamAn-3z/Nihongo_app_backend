@@ -155,6 +155,39 @@ class DeckController {
     }
   }
 
+  Future<Response> getDeckComments(Request request) async {
+    try {
+      final payload = request.context['authPayload'] as Map<String, dynamic>?;
+      if (payload == null || payload['userId'] == null) {
+        return Response.forbidden(jsonEncode({'message': 'Unauthorized'}));
+      }
+
+      final dynamic userId = payload['userId'];
+      final String? deckIdStr = request.params['id'];
+      
+      if (deckIdStr == null) {
+        return Response.badRequest(body: jsonEncode({'message': 'Missing deck ID'}));
+      }
+
+      final int deckId = int.parse(deckIdStr);
+      final comments = await _deckService.getDeckComments(deckId, userId);
+
+      return Response.ok(
+        jsonEncode({
+          "success": true,
+          "message": "Lấy danh sách bình luận thành công!",
+          "data": comments
+        }),
+        headers: {'content-type': 'application/json'},
+      );
+    } catch (e) {
+      return Response.internalServerError(
+        body: jsonEncode({"success": false, "message": e.toString()}),
+        headers: {'content-type': 'application/json'},
+      );
+    }
+  }
+
   Future<Response> toggleFavorite(Request request) async {
     try {
       final payload = request.context['authPayload'] as Map<String, dynamic>?;

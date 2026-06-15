@@ -23,5 +23,8 @@ Router deckRoutes(DeckController controller) {
   // Toggle Favorite (Bật/Tắt yêu thích)
   router.patch('/<id>/toggle-favorite', controller.toggleFavorite);
 
+  // Lấy danh sách bình luận của bộ đề
+  router.get('/<id>/comments', controller.getDeckComments);
+
   return router;
 }
