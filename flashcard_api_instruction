@@ -31,82 +31,76 @@ JSON
  }
 
  II Liệt kê danh sách các decks của user.
- Bước 1: INPUT (Dữ liệu đầu vào của API)
- Header: Authorization: Bearer <JWT_TOKEN>
- Bước 2: QUÁ TRÌNH TRUY VẤN DATABASE (SQL Query)
- Để lấy ra toàn bộ các bộ đề thuộc sở hữu hoặc đã lưu của User, bạn cần thực hiện một câu lệnh JOIN chính xác giữa bảng user_decks và Decks.
 
- Điểm cốt lõi tránh lỗi: Bạn bắt buộc phải lấy toàn bộ danh sách phẳng của tất cả các bộ đề về trước (bao gồm cả bộ đề cha và bộ đề con), sau đó mới dùng Code để dựng cây. Tuyệt đối không dùng SQL lọc WHERE parent_id IS NULL ngay từ đầu, nếu không bạn sẽ bị mất sạch các bộ đề con!
- Câu lệnh SQL
- SELECT
-     d.deck_id,
-     d.title,
-     d.parent_id,
-     d.public_status,
-     ud.is_favorite,
-     ud.last_studied_at
- FROM public.user_decks ud
- JOIN public.decks d ON ud.deck_id = d.deck_id
- WHERE ud.user_id = [userId_ép_kiểu_số_nguyên]
- ORDER BY d.parent_id ASC NULLS FIRST, d.title ASC;
- Bước 3: THUẬT TOÁN DỰNG CÂY ANKI (Logic Xử lý ở Backend)
- Sau khi nhận được danh sách phẳng từ DB, Backend (Node.js/Dart) cần chạy một thuật toán sử dụng cấu trúc dữ liệu Map/Dictionary để nhóm các bộ đề con vào bộ đề cha của chúng dựa trên parent_id. Điều này giúp Frontend nhận được một cục JSON phân cấp hoàn chỉnh mà không cần tốn tài nguyên chạy vòng lặp xử lý.
- Bước 4: OUTPUT (Dữ liệu trả về cho Frontend Flutter)
- Kết quả trả về sẽ mang mã trạng thái 200 OK cùng một cấu trúc mảng lồng nhau (Nested Array) cực kỳ tường minh.
+ Tôi đang xây dựng API lấy danh sách cây bộ đề cá nhân (My Decks) bằng Node.js (Express) kết nối với Database Supabase (PostgreSQL).
+ Hãy viết cho tôi TRỌN GÓI API (bao gồm Route và Controller) để lấy dữ liệu giống hệt giao diện Anki, đồng thời hiển thị thông tin tác giả.
 
- JSON
+ Thông tin ngữ cảnh và Logic tính toán thông số Anki từ Database của tôi:
+ 1. Xác thực: Lấy ID người dùng đang đăng nhập từ `req.user.user_id` (kiểu integer) qua middleware `verifyToken`.
+ 2. Lấy thông tin Tác giả: Bảng `decks` có trường `user_id` (chủ sở hữu). Cần JOIN với bảng `users` và `user_profiles` để lấy ra `username` và `avatar_url` của tác giả tạo ra deck đó.
+ 3. Tính toán thông số Anki cho từng bộ đề (Deck) dựa trên userId đang đăng nhập:
+    - Cần kết nối bảng `positions` (để lọc theo `deck_id`) với bảng cá nhân hóa `users_positions` (lọc theo `user_id` của người đang học).
+    - `new_count`: Đếm số lượng bản ghi có `status = 'NEW'`.
+    - `learning_count`: Đếm số lượng bản ghi có `status = 'LEARNING'`.
+    - `due_count`: Đếm số lượng bản ghi có `status = 'REVIEW'` VÀ `next_review <= NOW()`.
+    - Nếu bộ đề đó chưa có bản ghi nào trong `users_positions`, mặc định các thông số trên bằng 0.
+
+ Yêu cầu cấu trúc mã nguồn cần sinh ra:
+ Part 1. Định nghĩa Route: GET /api/v1/decks/my-decks (Đi qua middleware verifyToken).
+ Part 2. Hàm Controller xử lý:
+ - Viết câu lệnh SQL truy vấn nâng cao (Sử dụng Subquery hoặc Left Join kết hợp Group By) để bốc được toàn bộ các trường của bảng `decks`, thông tin tác giả, trạng thái `is_favorite` từ bảng `user_decks` của người dùng hiện tại, và 3 chỉ số `new_count`, `learning_count`, `due_count`.
+ - Sau khi lấy được mảng dữ liệu phẳng từ DB, hãy viết một hàm trợ giúp đệ quy (Recursive Helper Function) trong Node.js để tự động chuyển mảng phẳng đó thành cấu trúc cây lồng nhau (Tree Structure) dựa vào cặp `deck_id` và `parent_id`. Các bộ đề con sẽ được đẩy vào mảng `subDecks: []` của bộ đề cha tương ứng.
+
  {
    "success": true,
    "message": "Lấy danh sách cây bộ đề Anki thành công!",
    "data": [
      {
-       "deckId": 1,
-       "title": "Tiếng Nhật N3 Soumatome",
+       "deckId": 40,
+       "title": "Từ vựng Soumatome N3",
        "parentId": null,
        "publicStatus": "public",
-       "isFavorite": true,
-       "lastStudiedAt": "2026-06-12T07:00:00Z",
+       "isFavorite": false,
+       "lastStudiedAt": "2026-06-13T14:09:31.374Z",
+       -- 👨‍💻 Thông tin tác giả được bổ sung thêm ở đây
+       "author": {
+         "userId": 9,
+         "username": "thaygiaonhat2026",
+         "avatarUrl": "https://res.cloudinary.com/..."
+       },
+       -- 📊 Các thông số đếm chuẩn thuật toán Anki SM-2
+       "ankiStats": {
+         "newCount": 2,
+         "learningCount": 1,
+         "dueCount": 2
+       },
+       -- 🌲 Cấu trúc cây thư mục con (Sub-decks)
        "subDecks": [
          {
-           "deckId": 3,
-           "title": "Từ vựng - Chương 1",
-           "parentId": 1,
-           "publicStatus": "private",
-           "isFavorite": false,
-           "lastStudiedAt": "2026-06-11T15:30:00Z",
-           "subDecks": []
-         },
-         {
-           "deckId": 4,
-           "title": "Ngữ pháp - Tuần 1",
-           "parentId": 1,
+           "deckId": 41,
+           "title": "Chương 1: Kanji cơ bản",
+           "parentId": 40,
            "publicStatus": "public",
            "isFavorite": false,
            "lastStudiedAt": null,
+           "author": {
+             "userId": 9,
+             "username": "thaygiaonhat2026",
+             "avatarUrl": "https://res.cloudinary.com/..."
+           },
+           "ankiStats": {
+             "newCount": 10,
+             "learningCount": 0,
+             "dueCount": 0
+           },
            "subDecks": []
          }
        ]
-     },
-     {
-       "deckId": 2,
-       "title": "Tiếng Anh Chuyên Ngành IT",
-       "parentId": null,
-       "publicStatus": "private",
-       "isFavorite": false,
-       "lastStudiedAt": "2026-06-10T02:15:00Z",
-       "subDecks": []
      }
    ]
  }
- Lưu ý chí mạng cho Frontend (Flutter) để giao diện không lỗi
- Khi Backend đã trả ra cục JSON phân cấp dạng cây hoàn chỉnh này, các bạn Frontend làm UI chỉ cần tuân theo quy tắc:
 
- Dùng một Widget hiển thị danh sách động (ListView.builder).
-
- Với mỗi item, kiểm tra mảng subDecks. Nếu subDecks.isNotEmpty, hãy bọc nó trong một Widget có khả năng đóng/mở như ExpansionTile trong Flutter.
-
- Khi người dùng bấm vào mũi tên xổ xuống, chỉ cần duyệt mảng subDecks bên trong để render ra các dòng con thụt lề (Padding left).
-
+ Hãy viết mã nguồn JavaScript sạch sẽ, sử dụng cú pháp ES Modules (import/export), async/await, bọc trong khối try-catch để bắt lỗi hệ thống.
  III Để xây dựng API lấy toàn bộ thông tin dùng để học tập khi người dùng click vào một Deck, chúng ta phải giải quyết bài toán cốt lõi: Gom toàn bộ cấu trúc Ma trận đa chiều (Hàng, Cột, Ô nội dung) và trộn dữ liệu Cá nhân hóa hiển thị (users_groups) lẫn thuật toán bộ não SM-2 (users_positions) vào làm một.
  Bước 1: INPUT (Dữ liệu đầu vào)API này cần biết chính xác Ai đang học và học Bộ đề nào.Header: Authorization: Bearer <JWT_TOKEN> -> Giải mã lấy số nguyên userId.
  Bước 2: QUÁ TRÌNH TRUY VẤN DATABASE (SQL Query tối ưu)

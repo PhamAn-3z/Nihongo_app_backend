@@ -128,24 +128,34 @@ class DeckRepository {
   }
 
   Future<List<Map<String, dynamic>>> getUserDecks(int userId) async {
-    // ... (code cũ)
+    // Truy vấn kết hợp lấy Deck, Author và dữ liệu SM-2 của người học
     final response = await _client
         .from('user_decks')
-        .select('is_favorite, last_studied_at, decks!inner(deck_id, title, parent_id, public_status)')
+        .select('''
+          is_favorite,
+          last_studied_at,
+          decks!inner (
+            deck_id,
+            title,
+            parent_id,
+            public_status,
+            author:users!user_id (
+              username,
+              user_profiles (avatar_url)
+            ),
+            positions (
+              position_id,
+              users_positions (
+                status,
+                next_review
+              )
+            )
+          )
+        ''')
         .eq('user_id', userId)
-        .order('deck_id');
+        .eq('decks.positions.users_positions.user_id', userId);
 
-    return (response as List).map((item) {
-      final deck = item['decks'] as Map<String, dynamic>;
-      return {
-        'deckId': deck['deck_id'],
-        'title': deck['title'],
-        'parentId': deck['parent_id'],
-        'publicStatus': deck['public_status'],
-        'isFavorite': item['is_favorite'],
-        'lastStudiedAt': item['last_studied_at'],
-      };
-    }).toList();
+    return List<Map<String, dynamic>>.from(response);
   }
 
   Future<Map<String, dynamic>> getDeckStudyData(int deckId, int userId) async {

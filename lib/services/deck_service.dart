@@ -32,27 +32,84 @@ class DeckService {
 
   Future<List<Map<String, dynamic>>> getUserDecksTree(dynamic userId) async {
     final int formattedUserId = userId is String ? int.parse(userId) : userId as int;
+    final now = DateTime.now();
     
-    final flatList = await _deckRepository.getUserDecks(formattedUserId);
+    final List<dynamic> rawData = await _deckRepository.getUserDecks(formattedUserId);
     
-    // Thuật toán dựng cây (Tree Building Algorithm)
-    Map<int, Map<String, dynamic>> deckMap = {};
+    // Bước 1: Làm phẳng và tính toán thông số Anki + Author cho từng Deck
+    List<Map<String, dynamic>> processedList = rawData.map((item) {
+      final deck = item['decks'] as Map<String, dynamic>;
+      final authorData = deck['author'] as Map<String, dynamic>?;
+      
+      // Lấy profile từ mảng lồng nhau
+      final profiles = authorData?['user_profiles'] as List?;
+      final authorProfile = (profiles != null && profiles.isNotEmpty) ? profiles[0] : null;
+      
+      final positions = deck['positions'] as List? ?? [];
+
+      // Tính toán thông số Anki
+      int newCount = 0;
+      int learningCount = 0;
+      int dueCount = 0;
+
+      for (var pos in positions) {
+        final upList = pos['users_positions'] as List?;
+        final up = (upList != null && upList.isNotEmpty) ? upList[0] : null;
+
+        if (up == null) {
+          newCount++; // Chưa có dữ liệu học tập coi như là thẻ mới
+          continue;
+        }
+
+        final String status = up['status'] ?? 'NEW';
+        final String? nextReviewStr = up['next_review'];
+
+        if (status == 'NEW') {
+          newCount++;
+        } else if (status == 'LEARNING') {
+          learningCount++;
+        } else if (status == 'REVIEW') {
+          if (nextReviewStr != null) {
+            final nextReview = DateTime.parse(nextReviewStr);
+            if (nextReview.isBefore(now)) {
+              dueCount++;
+            }
+          }
+        }
+      }
+
+      return {
+        'deckId': deck['deck_id'],
+        'title': deck['title'],
+        'parentId': deck['parent_id'],
+        'publicStatus': deck['public_status'],
+        'isFavorite': item['is_favorite'] ?? false,
+        'lastStudiedAt': item['last_studied_at'],
+        'author': {
+          'username': authorData?['username'] ?? 'Ẩn danh',
+          'avatarUrl': authorProfile?['avatar_url']
+        },
+        'ankiStats': {
+          'newCount': newCount,
+          'learningCount': learningCount,
+          'dueCount': dueCount,
+        },
+        'subDecks': <Map<String, dynamic>>[]
+      };
+    }).toList();
+
+    // Bước 2: Dựng cây phân cấp (Tree Algorithm)
+    Map<int, Map<String, dynamic>> deckMap = {
+      for (var deck in processedList) deck['deckId']: deck
+    };
+    
     List<Map<String, dynamic>> rootDecks = [];
 
-    // Bước 1: Khởi tạo Map và danh sách subDecks trống
-    for (var deck in flatList) {
-      deck['subDecks'] = [];
-      deckMap[deck['deckId']] = deck;
-    }
-
-    // Bước 2: Liên kết con vào cha
-    for (var deck in flatList) {
+    for (var deck in processedList) {
       final parentId = deck['parentId'];
       if (parentId != null && deckMap.containsKey(parentId)) {
         deckMap[parentId]!['subDecks'].add(deck);
       } else {
-        // Nếu không có parent hoặc parent không nằm trong danh sách sở hữu của user
-        // (Trường hợp này hiếm nhưng vẫn có thể xảy ra nếu dữ liệu lỗi)
         rootDecks.add(deck);
       }
     }
