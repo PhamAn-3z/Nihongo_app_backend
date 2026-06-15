@@ -158,17 +158,69 @@ class DeckService {
     return rawComments.map((item) {
       final List<dynamic> likes = item['comment_likes'] ?? [];
       final user = item['users'] ?? {};
-      final profile = item['user_profiles'] ?? {};
+      // Lấy profile từ mảng (Supabase trả về mảng cho quan hệ 1-1 nếu không dùng single)
+      final profile = (user['user_profiles'] is List && (user['user_profiles'] as List).isNotEmpty)
+          ? user['user_profiles'][0]
+          : (user['user_profiles'] ?? {});
 
       return {
-        'id': item['id'],
+        'id': item['comment_id'],
         'content': item['content'],
         'createdAt': item['created_at'],
         'username': user['username'] ?? 'Người dùng',
-        'avatarUrl': profile['avatar_url'],
+        'avatarUrl': profile['avatar_url'], // Sẽ trả về null nếu không có ảnh, khớp với DB của bạn
         'totalLikes': likes.length,
         'isLikedByMe': likes.any((l) => l['user_id'] == formattedUserId),
       };
     }).toList();
+  }
+
+  Future<Map<String, dynamic>> addComment({
+    required int deckId,
+    required dynamic userId,
+    int? parentCommentId,
+    required String content,
+  }) async {
+    final int formattedUserId = userId is String ? int.parse(userId) : userId as int;
+    
+    // Bước 1: Validate nội dung (trim)
+    if (content.trim().isEmpty) {
+      throw Exception('Nội dung bình luận không được để trống!');
+    }
+
+    // Bước 2 & 3: Gọi repository để kiểm tra parent và insert
+    return await _deckRepository.addComment(
+      deckId: deckId,
+      userId: formattedUserId,
+      parentCommentId: parentCommentId,
+      content: content,
+    );
+  }
+
+  Future<void> deleteComment({
+    required int commentId,
+    required dynamic userId,
+  }) async {
+    final int formattedUserId = userId is String ? int.parse(userId) : userId as int;
+
+    // Bước 1: Kiểm tra comment tồn tại
+    final comment = await _deckRepository.getCommentById(commentId);
+    if (comment == null) {
+      throw Exception('Bình luận không tồn tại hoặc đã bị xóa trước đó!');
+    }
+
+    final int deckId = comment['deck_id'];
+    final int commentAuthorId = comment['user_id'];
+
+    // Bước 2: Lấy thông tin chủ sở hữu bộ đề
+    final deckOwnerId = await _deckRepository.getDeckOwnerId(deckId);
+
+    // Bước 3: Kiểm tra quyền xóa (Author của comment HOẶC Owner của deck)
+    if (formattedUserId != commentAuthorId && formattedUserId != deckOwnerId) {
+      throw Exception('FORBIDDEN: Bạn không có quyền xóa bình luận này!');
+    }
+
+    // Bước 4: Xóa
+    await _deckRepository.deleteComment(commentId);
   }
 }

@@ -212,21 +212,76 @@ class DeckRepository {
   }
 
   Future<List<dynamic>> getDeckComments(int deckId) async {
-    // Truy vấn lấy comment, thông tin user và danh sách likes để tính toán ở Service
+    // Lồng user_profiles vào trong users để tránh lỗi alias cột
     final response = await _client
         .from('deck_comments')
         .select('''
-          id,
+          comment_id,
           content,
           created_at,
           user_id,
-          users:user_id (username),
-          user_profiles:user_id (avatar_url),
+          users:user_id (
+            username,
+            user_profiles (avatar_url)
+          ),
           comment_likes (user_id)
         ''')
         .eq('deck_id', deckId)
         .order('created_at', ascending: false);
 
     return response as List<dynamic>;
+  }
+
+  Future<Map<String, dynamic>> addComment({
+    required int deckId,
+    required int userId,
+    int? parentCommentId,
+    required String content,
+  }) async {
+    // Nếu có parentCommentId, kiểm tra sự tồn tại của nó
+    if (parentCommentId != null) {
+      final parentCheck = await _client
+          .from('deck_comments')
+          .select('comment_id')
+          .eq('comment_id', parentCommentId)
+          .eq('deck_id', deckId)
+          .maybeSingle();
+
+      if (parentCheck == null) {
+        throw Exception('Bình luận gốc không tồn tại hoặc không thuộc bộ đề này!');
+      }
+    }
+
+    // Insert comment mới
+    final response = await _client.from('deck_comments').insert({
+      'deck_id': deckId,
+      'user_id': userId,
+      'parent_comment_id': parentCommentId,
+      'content': content.trim(),
+    }).select().single();
+
+    return response;
+  }
+
+  Future<Map<String, dynamic>?> getCommentById(int commentId) async {
+    final response = await _client
+        .from('deck_comments')
+        .select('comment_id, deck_id, user_id')
+        .eq('comment_id', commentId)
+        .maybeSingle();
+    return response;
+  }
+
+  Future<int?> getDeckOwnerId(int deckId) async {
+    final response = await _client
+        .from('decks')
+        .select('user_id')
+        .eq('deck_id', deckId)
+        .maybeSingle();
+    return response != null ? response['user_id'] as int : null;
+  }
+
+  Future<void> deleteComment(int commentId) async {
+    await _client.from('deck_comments').delete().eq('comment_id', commentId);
   }
 }

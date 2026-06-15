@@ -298,3 +298,57 @@ Tôi đang làm phương án tách API cho màn hình tổng quan bộ đề tro
          5. Sắp xếp kết quả trả về theo `created_at DESC`.
 
          Hãy viết mã nguồn sạch sẽ, bọc trong try-catch và phản hồi định dạng JSON chuẩn gồm success, message và data (mảng danh sách comment).
+
+Phần VII: add comment
+Hãy viết cho tôi API xử lý việc Thêm bình luận mới (Add Comment)
+
+Thông tin ngữ cảnh hệ thống và Database:
+1. Bản ghi tài khoản người dùng: Khóa chính là `user_id` kiểu `integer`. Hệ thống có một Middleware xác thực tên là `verifyToken` để giải mã JWT và gán sẵn ID này vào `req.user.user_id`.
+2. Bản ghi bộ đề: Khóa chính là `deck_id` kiểu `integer` (Lấy từ tham số URL `:deck_id`).
+3. Cấu trúc bảng `public.deck_comments` gồm các trường:
+   - `comment_id`: integer (Khóa chính tự động tăng)
+   - `deck_id`: integer (Khóa ngoại nối với bảng decks)
+   - `user_id`: integer (Khóa ngoại nối với bảng users, đại diện người viết)
+   - `parent_comment_id`: integer (Có thể mang giá trị NULL nếu là comment gốc, hoặc mang ID của comment khác nếu là câu trả lời Reply)
+   - `content`: text (Nội dung chữ của bình luận)
+   - `is_edited`: boolean (Mặc định là false)
+   - `created_at` và `updated_at`: timestamp
+
+Yêu cầu cấu trúc mã nguồn cần sinh ra:
+Part 1. Cấu hình Router (Express Router):
+- Định nghĩa Route: POST /api/v1/decks/:deck_id/comments
+- Bắt buộc phải đi qua middleware `verifyToken` trước khi vào controller.
+
+Part 2. Logic nghiệp vụ trong Hàm Controller (Sử dụng thư viện @supabase/supabase-js):
+- Bước 1: Validate đầu vào của trường `content`. Sử dụng `.trim()` để loại bỏ khoảng trắng ở hai đầu. Nếu chuỗi rỗng (`content.trim().length === 0`), lập tức chặn lại và trả về mã lỗi `400 Bad Request` kèm JSON: {"success": false, "message": "Nội dung bình luận không được để trống!"}
+- Bước 2: Thiết lập lớp phòng thủ kiểm tra bình luận cha. Nếu `parentCommentId` do client gửi lên trong req.body khác `null` hoặc `undefined`, hãy truy vấn vào bảng `deck_comments` để kiểm tra xem bình luận cha đó có thực sự tồn tại trong DB và phải thuộc cùng một `deck_id` đó hay không. Nếu không thỏa mãn, trả về mã lỗi `404 Not Found` kèm JSON: {"success": false, "message": "Bình luận gốc không tồn tại hoặc đã bị xóa!"}
+- Bước 3: Thực hiện INSERT dữ liệu dòng mới vào bảng `deck_comments` bằng Supabase client. Ép kiểu `parseInt` cho các trường ID để tránh lỗi kiểu dữ liệu int4.
+- Bước 4: Trả về kết quả thành công với mã trạng thái `201 Created` kèm theo cục JSON chứa thông tin bản ghi comment vừa tạo để Frontend cập nhật UI ngay lập tức.
+
+Hãy viết mã nguồn JavaScript sạch sẽ, sử dụng cú pháp ES Modules (import/export), async/await, bọc toàn bộ logic trong khối try-catch để bắt lỗi hệ thống và trả về mã lỗi 500 nếu có sự cố ngoài ý muốn.
+
+Phần VIII: Xóa comment
+Tôi đang xây dựng API cho hệ thống Flashcard ma trận đa chiều bằng Node.js (Express) kết nối với Database Supabase (PostgreSQL).
+Hãy viết cho tôi TRỌN GÓI API xử lý việc Xóa bình luận (Delete Comment) bao gồm cả phần định nghĩa Route và hàm xử lý Controller.
+
+Thông tin ngữ cảnh hệ thống và Database liên quan:
+1. Xác thực: Hệ thống có Middleware `verifyToken` để giải mã JWT và gán ID người dùng hiện tại vào `req.user.user_id` (kiểu integer).
+2. URL tham số: `:comment_id` (kiểu integer) là ID của comment cần xóa, lấy từ `req.params.comment_id`.
+3. Bảng dữ liệu liên quan:
+   - Bảng `public.deck_comments` có các trường: `comment_id`, `deck_id`, `user_id` (người viết comment).
+   - Bảng `public.decks` có các trường: `deck_id`, `user_id` (tác giả sở hữu bộ đề).
+
+Yêu cầu cấu trúc mã nguồn cần sinh ra:
+Part 1. Cấu hình Router (Express Router):
+- Định nghĩa Route: DELETE /api/v1/comments/:comment_id
+- Bắt buộc phải đi qua middleware `verifyToken` trước khi vào controller.
+
+Part 2. Logic nghiệp vụ trong Hàm Controller (Sử dụng thư viện @supabase/supabase-js):
+- Bước 1: Truy vấn bảng `deck_comments` dựa vào `comment_id` để kiểm tra xem comment đó có tồn tại hay không. Nếu không tồn tại, trả về mã `404 Not Found` kèm JSON: {"success": false, "message": "Bình luận không tồn tại hoặc đã bị xóa trước đó!"}.
+- Bước 2: Lấy thông tin `deck_id` từ comment vừa tìm được, truy vấn tiếp vào bảng `decks` để lấy ra `user_id` của chủ sở hữu bộ đề đó.
+- Bước 3: THIẾT LẬP LỚP PHÒNG THỦ PHÂN QUYỀN (Authorization Check):
+  Kiểm tra xem `req.user.user_id` (người đang gọi API) có trùng với `user_id` của người viết comment HOẶC có trùng với `user_id` của chủ sở hữu bộ đề hay không. Nếu KHÔNG TRÙNG cả hai trường hợp trên, lập tức chặn lại và trả về mã lỗi `403 Forbidden` kèm JSON: {"success": false, "message": "Bạn không có quyền xóa bình luận này!"}.
+- Bước 4: Nếu vượt qua vòng phân quyền, thực hiện lệnh DELETE bản ghi comment có `comment_id` tương ứng khỏi bảng `deck_comments`. (Lưu ý: Hệ thống đã cấu hình ON DELETE CASCADE nên các comment con và lượt thích liên quan sẽ tự động bị DB xóa ngầm).
+- Bước 5: Trả về mã trạng thái `200 OK` kèm JSON: {"success": true, "message": "Xóa bình luận thành công!"}.
+
+Hãy viết mã nguồn JavaScript sạch sẽ, sử dụng cú pháp ES Modules (import/export), async/await, bọc toàn bộ logic trong khối try-catch để bắt lỗi hệ thống và trả về mã lỗi 500 nếu có sự cố ngoài ý muốn.

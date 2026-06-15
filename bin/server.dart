@@ -43,6 +43,7 @@ import 'package:flashcard_quiz_backend/repositories/deck_repository.dart';
 import 'package:flashcard_quiz_backend/services/deck_service.dart';
 import 'package:flashcard_quiz_backend/controllers/deck_controller.dart';
 import 'package:flashcard_quiz_backend/routes/deck_routes.dart';
+import 'package:flashcard_quiz_backend/routes/comment_routes.dart';
 
 import 'package:flashcard_quiz_backend/middlewares/auth_middleware.dart';
 import 'package:flashcard_quiz_backend/middlewares/cors_middleware.dart';
@@ -114,6 +115,7 @@ void main() async {
   router.mount('/api/v1/stats', userStatsRoutes(userStatsController));
   router.mount('/api/v1/vnpay', vnpayRoutes(vnpayController));
   router.mount('/api/v1/decks', deckRoutes(deckController));
+  router.mount('/api/v1/comments', commentRoutes(deckController));
 
   // 5. Route được bảo vệ (Yêu cầu JWT Token)
   router.get('/api/v1/user/profile', (Request request) {
@@ -133,6 +135,7 @@ void main() async {
           request.url.path.startsWith('api/v1/stats') ||
           request.url.path.startsWith('api/v1/receipts')||
           request.url.path.contains('api/v1/decks') ||
+          request.url.path.contains('api/v1/comments') ||
           request.url.path.contains('api/v1/user') ||
           request.url.path.endsWith('auth/logout')) {
         return authMiddleware()(innerHandler)(request);

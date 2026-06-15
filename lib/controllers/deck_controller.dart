@@ -188,6 +188,98 @@ class DeckController {
     }
   }
 
+  Future<Response> addComment(Request request) async {
+    try {
+      final payload = request.context['authPayload'] as Map<String, dynamic>?;
+      if (payload == null || payload['userId'] == null) {
+        return Response.forbidden(jsonEncode({'message': 'Unauthorized'}));
+      }
+
+      final dynamic userId = payload['userId'];
+      final String? deckIdStr = request.params['id'];
+      
+      if (deckIdStr == null) {
+        return Response.badRequest(body: jsonEncode({'message': 'Missing deck ID'}));
+      }
+
+      final int deckId = int.parse(deckIdStr);
+      final body = jsonDecode(await request.readAsString());
+      
+      final String content = body['content'] ?? '';
+      final int? parentCommentId = body['parentCommentId'];
+
+      final comment = await _deckService.addComment(
+        deckId: deckId,
+        userId: userId,
+        parentCommentId: parentCommentId,
+        content: content,
+      );
+
+      return Response(201, // Created
+        body: jsonEncode({
+          "success": true,
+          "message": "Đã thêm bình luận thành công!",
+          "data": comment
+        }),
+        headers: {'content-type': 'application/json'},
+      );
+    } catch (e) {
+      // Làm sạch thông báo lỗi để trả về cho Client
+      final message = e.toString().contains('Exception: ') 
+          ? e.toString().split('Exception: ')[1] 
+          : e.toString();
+
+      return Response(400,
+        body: jsonEncode({"success": false, "message": message}),
+        headers: {'content-type': 'application/json'},
+      );
+    }
+  }
+
+  Future<Response> deleteComment(Request request) async {
+    try {
+      final payload = request.context['authPayload'] as Map<String, dynamic>?;
+      if (payload == null || payload['userId'] == null) {
+        return Response.forbidden(jsonEncode({'message': 'Unauthorized'}));
+      }
+
+      final dynamic userId = payload['userId'];
+      final String? commentIdStr = request.params['comment_id'];
+
+      if (commentIdStr == null) {
+        return Response.badRequest(body: jsonEncode({'message': 'Missing comment ID'}));
+      }
+
+      final int commentId = int.parse(commentIdStr);
+      await _deckService.deleteComment(commentId: commentId, userId: userId);
+
+      return Response.ok(
+        jsonEncode({
+          "success": true,
+          "message": "Xóa bình luận thành công!"
+        }),
+        headers: {'content-type': 'application/json'},
+      );
+    } catch (e) {
+      final errorMsg = e.toString();
+      if (errorMsg.contains('FORBIDDEN')) {
+        return Response.forbidden(
+          jsonEncode({"success": false, "message": "Bạn không có quyền xóa bình luận này!"}),
+          headers: {'content-type': 'application/json'},
+        );
+      }
+      
+      final message = errorMsg.contains('Exception: ') 
+          ? errorMsg.split('Exception: ')[1] 
+          : errorMsg;
+
+      return Response(404, // Not Found hoặc 400 tùy trường hợp, ở đây đa số là 404
+        body: jsonEncode({"success": false, "message": message}),
+        headers: {'content-type': 'application/json'},
+      );
+    }
+  }
+
   Future<Response> toggleFavorite(Request request) async {
     try {
       final payload = request.context['authPayload'] as Map<String, dynamic>?;

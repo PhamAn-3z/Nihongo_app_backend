@@ -26,5 +26,8 @@ Router deckRoutes(DeckController controller) {
   // Lấy danh sách bình luận của bộ đề
   router.get('/<id>/comments', controller.getDeckComments);
 
+  // Thêm bình luận mới vào bộ đề
+  router.post('/<id>/comments', controller.addComment);
+
   return router;
 }
