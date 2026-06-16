@@ -58,7 +58,7 @@ void main() async {
   final String supabaseKey = env['SUPABASE_KEY'] ?? '';
 
   if (supabaseUrl.isEmpty || supabaseKey.isEmpty) {
-    print('From sever.dart: Lỗi: Chưa cấu hình SUPABASE_URL hoặc SUPABASE_KEY trong file .env');
+    print('From sever.dart:  Lỗi: Chưa cấu hình SUPABASE_URL hoặc SUPABASE_KEY trong file .env. Hãy lấy key trong zalo');
     return;
   }
 
