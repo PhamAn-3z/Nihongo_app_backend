@@ -5,6 +5,7 @@ import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:shelf_router/shelf_router.dart';
 import 'package:supabase/supabase.dart';
+import 'package:dotenv/dotenv.dart';
 
 // Import các layer theo kiến trúc Spring Boot
 import 'package:flashcard_quiz_backend/repositories/user_repository.dart';
@@ -49,9 +50,17 @@ import 'package:flashcard_quiz_backend/middlewares/auth_middleware.dart';
 import 'package:flashcard_quiz_backend/middlewares/cors_middleware.dart';
 
 void main() async {
+  // Tải biến môi trường từ file .env
+  final env = DotEnv(includePlatformEnvironment: true)..load();
+
   // 1. Cấu hình kết nối Supabase
-  final String supabaseUrl = 'https://xdekwfqnhrohydgejhdk.supabase.co';
-  final String supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkZWt3ZnFuaHJvaHlkZ2VqaGRrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3OTM2OTU1MiwiZXhwIjoyMDk0OTQ1NTUyfQ.xzmqvCs5TtZvAOrD3h2nwEpXgz6H_Ohy-TFBcO1vfd8';
+  final String supabaseUrl = env['SUPABASE_URL'] ?? '';
+  final String supabaseKey = env['SUPABASE_KEY'] ?? '';
+
+  if (supabaseUrl.isEmpty || supabaseKey.isEmpty) {
+    print('From sever.dart: Lỗi: Chưa cấu hình SUPABASE_URL hoặc SUPABASE_KEY trong file .env');
+    return;
+  }
 
   final supabaseClient = SupabaseClient(supabaseUrl, supabaseKey);
   print('🔌 Đang thiết lập kết nối đến Supabase Cloud...');
