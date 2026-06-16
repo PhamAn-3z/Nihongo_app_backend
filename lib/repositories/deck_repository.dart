@@ -128,7 +128,7 @@ class DeckRepository {
   }
 
   Future<List<Map<String, dynamic>>> getUserDecks(int userId) async {
-    // Truy vấn kết hợp lấy Deck, Author và dữ liệu SM-2 của người học
+    // Truy vấn bốc toàn bộ thông tin Deck, Author và dữ liệu SM-2 của người học
     final response = await _client
         .from('user_decks')
         .select('''
@@ -146,14 +146,14 @@ class DeckRepository {
             positions (
               position_id,
               users_positions (
+                user_id,
                 status,
                 next_review
               )
             )
           )
         ''')
-        .eq('user_id', userId)
-        .eq('decks.positions.users_positions.user_id', userId);
+        .eq('user_id', userId);
 
     return List<Map<String, dynamic>>.from(response);
   }

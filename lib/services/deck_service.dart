@@ -54,10 +54,14 @@ class DeckService {
 
       for (var pos in positions) {
         final upList = pos['users_positions'] as List?;
-        final up = (upList != null && upList.isNotEmpty) ? upList[0] : null;
+        // Lọc đúng bản ghi của người đang học (vì một position có thể có nhiều người học)
+        final up = (upList != null) 
+            ? upList.firstWhere((u) => u['user_id'] == formattedUserId, orElse: () => null)
+            : null;
 
         if (up == null) {
-          newCount++; // Chưa có dữ liệu học tập coi như là thẻ mới
+          // Theo yêu cầu: Nếu chưa có bản ghi thì thông số = 0. 
+          // Nếu bạn muốn tính là thẻ mới, hãy dùng: newCount++;
           continue;
         }
 
