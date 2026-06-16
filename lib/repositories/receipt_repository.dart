@@ -37,7 +37,7 @@ class ReceiptRepository {
   }
 
   Future<void> deleteExpiredUnpaidReceipts() async {
-    final tenMinutesAgo = DateTime.now().subtract(Duration(minutes: 10)).toIso8601String();
+    final tenMinutesAgo = DateTime.now().subtract(Duration(minutes: 30)).toIso8601String();
     
     await supabase
         .from('Receipt')

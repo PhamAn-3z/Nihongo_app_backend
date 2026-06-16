@@ -94,7 +94,7 @@ void main() async {
 
 
   // 2.1 Start Background Cleanup Task (Every 5 minutes)
-  Timer.periodic(Duration(minutes: 5), (timer) async {
+  Timer.periodic(Duration(minutes: 30), (timer) async {
     print('🧹 [${DateTime.now()}] Running background cleanup: Deleting expired unpaid receipts...');
     try {
       await receiptService.cleanupExpiredReceipts();
