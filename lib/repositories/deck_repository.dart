@@ -230,6 +230,7 @@ class DeckRepository {
           content,
           created_at,
           user_id,
+          parent_comment_id,
           users:user_id (
             username,
             user_profiles (avatar_url)

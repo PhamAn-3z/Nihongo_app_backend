@@ -226,6 +226,7 @@ class DeckService {
 
       return {
         'id': item['comment_id'],
+        'parentId': item['parent_comment_id'],
         'content': item['content'],
         'createdAt': item['created_at'],
         'username': user['username'] ?? 'Người dùng',
