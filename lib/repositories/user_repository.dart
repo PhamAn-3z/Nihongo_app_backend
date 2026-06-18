@@ -37,6 +37,14 @@ class UserRepository {
     return response;
   }
 
+  // Cập nhật email_verified = true
+  Future<void> markEmailAsVerified(int userId) async {
+    await supabase
+        .from('users')
+        .update({'email_verified': true})
+        .eq('user_id', userId);
+  }
+
   // Cập nhật hoặc tạo mới profile (Hỗ trợ cập nhật từng phần)
   Future<Map<String, dynamic>> updateProfile(String userId, Map<String, dynamic> profileData) async {
     // Kiểm tra xem đã có profile chưa
