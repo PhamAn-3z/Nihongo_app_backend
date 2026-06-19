@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:shelf/shelf.dart';
-import 'package:minio_new/minio.dart' as minio_lib;
+import 'package:minio/minio.dart' as minio_lib;
 import 'package:dotenv/dotenv.dart';
 
 class AudioController {
@@ -125,6 +125,107 @@ class AudioController {
         body: jsonEncode({
           'success': false, 
           'message': 'Lỗi hệ thống khi xóa file: ${e.toString()}'
+        }),
+        headers: {'content-type': 'application/json'},
+      );
+    }
+  }
+
+  /// API dọn dẹp file rác trên Cloudflare R2 (Đối chiếu với bảng terms trong DB)
+  Future<Response> cleanupGarbageAudiosHandler(Request request, dynamic supabaseClient) async {
+    try {
+      // 1. Quét toàn bộ danh sách file hiện có trên R2 trong thư mục audios/
+      final List<String> r2Keys = [];
+      
+      // Sử dụng listObjectsV2 của thư viện chính chủ minio
+      final objectsStream = minio.listObjectsV2(bucketName, prefix: 'audios/', recursive: true);
+
+      await for (final result in objectsStream) {
+        for (final obj in result.objects) {
+          if (obj.key != null) {
+            r2Keys.add(obj.key!);
+          }
+        }
+      }
+
+      if (r2Keys.isEmpty) {
+        return Response.ok(
+          jsonEncode({'success': true, 'message': 'Kho lưu trữ R2 hiện đang trống.'}),
+          headers: {'content-type': 'application/json'},
+        );
+      }
+
+      // 2. Truy vấn Database lấy toàn bộ audio_url đang được sử dụng
+      final List<dynamic> dbResponse = await supabaseClient.from('terms').select('content');
+
+      final Set<String> validKeys = {};
+      for (var row in dbResponse) {
+        final dynamic content = row['content'];
+        if (content != null && content is Map && content.containsKey('audio_url')) {
+          final String? audioUrl = content['audio_url'];
+          if (audioUrl != null && audioUrl.isNotEmpty) {
+            // Trích xuất Key từ URL (ví dụ: https://.../audios/123.mp3 -> audios/123.mp3)
+            final uri = Uri.parse(audioUrl);
+            String path = uri.path.startsWith('/') ? uri.path.substring(1) : uri.path;
+            validKeys.add(path);
+          }
+        }
+      }
+
+      // 3. Tìm file rác (Có trên R2 nhưng KHÔNG có trong DB)
+      final List<String> garbageKeys = r2Keys.where((key) => !validKeys.contains(key)).toList();
+
+      if (garbageKeys.isEmpty) {
+        return Response.ok(
+          jsonEncode({'success': true, 'message': 'Hệ thống sạch sẽ, không có file rác.'}),
+          headers: {'content-type': 'application/json'},
+        );
+      }
+
+      // 5. Thực hiện xóa từng file một trên R2 để đảm bảo lệnh được thực thi
+      final List<String> deletedFiles = [];
+      final List<String> failedFiles = [];
+
+      for (final key in garbageKeys) {
+        try {
+          await minio.removeObject(bucketName, key);
+          deletedFiles.add(key);
+        } catch (e) {
+          failedFiles.add('$key (Lỗi: $e)');
+        }
+      }
+
+      if (deletedFiles.isEmpty && failedFiles.isNotEmpty) {
+        return Response.internalServerError(
+          body: jsonEncode({
+            'success': false,
+            'message': 'Không thể xóa bất kỳ file nào.',
+            'errors': failedFiles,
+          }),
+          headers: {'content-type': 'application/json'},
+        );
+      }
+
+      return Response.ok(
+        jsonEncode({
+          'success': true,
+          'message': failedFiles.isEmpty 
+              ? 'Tiến trình dọn rác hoàn tất!' 
+              : 'Dọn rác hoàn tất một phần (có một số lỗi).',
+          'data': {
+            'total_scanned_files': r2Keys.length,
+            'deleted_garbage_count': deletedFiles.length,
+            'deleted_files': deletedFiles,
+            'failed_files': failedFiles,
+          }
+        }),
+        headers: {'content-type': 'application/json'},
+      );
+    } catch (e) {
+      return Response.internalServerError(
+        body: jsonEncode({
+          'success': false,
+          'message': 'Lỗi hệ thống khi dọn rác: ${e.toString()}'
         }),
         headers: {'content-type': 'application/json'},
       );
