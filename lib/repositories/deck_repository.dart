@@ -85,10 +85,45 @@ class DeckRepository {
         // Tạo terms cho từng group trong row
         groupMap.forEach((key, groupId) {
           if (rowData.containsKey(key)) {
+            final dynamic value = rowData[key];
+            Map<String, dynamic> contentNode;
+
+            if (value is Map<String, dynamic>) {
+              // Trường hợp 1: Frontend chủ động gửi Object {text, audio_url, image_url}
+              contentNode = {
+                'text': value['text'] ?? '',
+                'audio_url': value['audio_url'],
+                'image_url': value['image_url'],
+              };
+            } else {
+              final String valStr = value?.toString() ?? '';
+              
+              // Trường hợp 2: Kiểm tra nếu là link audio từ Cloudflare R2 hoặc file âm thanh
+              final bool isAudio = valStr.startsWith('http') && 
+                                  (valStr.contains('r2.dev') || 
+                                   valStr.toLowerCase().endsWith('.mp3') || 
+                                   valStr.toLowerCase().endsWith('.wav'));
+
+              if (isAudio) {
+                contentNode = {
+                  'text': '', 
+                  'audio_url': valStr,
+                  'image_url': null
+                };
+              } else {
+                // Trường hợp 3: Văn bản bình thường
+                contentNode = {
+                  'text': valStr,
+                  'audio_url': null,
+                  'image_url': null
+                };
+              }
+            }
+
             termsToInsert.add({
               'group_id': groupId,
               'position_id': positionId,
-              'content': {'text': rowData[key].toString()},
+              'content': contentNode,
             });
           }
         });

@@ -43,8 +43,10 @@ import 'package:flashcard_quiz_backend/controllers/vnpay_controller.dart';
 import 'package:flashcard_quiz_backend/repositories/deck_repository.dart';
 import 'package:flashcard_quiz_backend/services/deck_service.dart';
 import 'package:flashcard_quiz_backend/controllers/deck_controller.dart';
+import 'package:flashcard_quiz_backend/controllers/audio_controller.dart'; // Import mới
 import 'package:flashcard_quiz_backend/routes/deck_routes.dart';
 import 'package:flashcard_quiz_backend/routes/comment_routes.dart';
+import 'package:flashcard_quiz_backend/routes/audio_routes.dart'; // Import mới
 
 import 'package:flashcard_quiz_backend/middlewares/auth_middleware.dart';
 import 'package:flashcard_quiz_backend/middlewares/cors_middleware.dart';
@@ -98,6 +100,7 @@ void main() async {
   final userStatsController = UserStatsController(userStatsService);
   final vnpayController = VnPayController(vnpayService, receiptService);
   final deckController = DeckController(deckService);
+  final audioController = AudioController(); // Khởi tạo Controller Audio
 
 
 
@@ -125,6 +128,7 @@ void main() async {
   router.mount('/api/v1/vnpay', vnpayRoutes(vnpayController));
   router.mount('/api/v1/decks', deckRoutes(deckController));
   router.mount('/api/v1/comments', commentRoutes(deckController));
+  router.mount('/api/v1/audio', audioRoutes(audioController, supabaseClient)); // Thêm tham số supabaseClient
 
   // 5. Route được bảo vệ (Yêu cầu JWT Token)
   router.get('/api/v1/user/profile', (Request request) {
@@ -140,13 +144,22 @@ void main() async {
       .addMiddleware(corsMiddleware()) // <-- thêm lại CORS
       .addMiddleware((Handler innerHandler) {
     return (Request request) {
-      if (request.url.path.startsWith('api/v1/profile') ||
-          request.url.path.startsWith('api/v1/stats') ||
-          request.url.path.startsWith('api/v1/receipts')||
-          request.url.path.contains('api/v1/decks') ||
-          request.url.path.contains('api/v1/comments') ||
-          request.url.path.contains('api/v1/user') ||
-          request.url.path.endsWith('auth/logout')) {
+      final path = request.url.path;
+
+      // 1. Nếu là login hoặc register -> Bỏ qua check Token (Công khai)
+      if (path.contains('auth/login') || path.contains('auth/register')) {
+        return innerHandler(request);
+      }
+
+      // 2. Kiểm tra các vùng bảo mật cần Token
+      if (path.startsWith('api/v1/profile') ||
+          path.startsWith('api/v1/stats') ||
+          path.startsWith('api/v1/receipts') ||
+          path.contains('api/v1/decks') ||
+          path.contains('api/v1/comments') ||
+          path.contains('api/v1/audio') ||
+          path.contains('api/v1/user') ||
+          path.endsWith('auth/logout')) {
         return authMiddleware()(innerHandler)(request);
       }
 

@@ -346,3 +346,59 @@ Part 2. Logic nghiệp vụ trong Hàm Controller (Sử dụng thư viện @supa
 - Bước 5: Trả về mã trạng thái `200 OK` kèm JSON: {"success": true, "message": "Xóa bình luận thành công!"}.
 
 Hãy viết mã nguồn JavaScript sạch sẽ, sử dụng cú pháp ES Modules (import/export), async/await, bọc toàn bộ logic trong khối try-catch để bắt lỗi hệ thống và trả về mã lỗi 500 nếu có sự cố ngoài ý muốn.
+
+Phần IX:
+Tôi đang viết Backend bằng ngôn ngữ Dart (sử dụng thư viện shelf) . Tôi muốn làm tính năng cấp "liên kết tải lên tạm thời" (Pre-signed URL) để cho phép Frontend Flutter có thể upload file ghi âm phát âm (Audio) trực tiếp lên kho chứa Cloudflare R2 (S3 V2 API).
+
+         Tôi đã chuẩn bị các biến môi trường trong file `.env` ở Backend như sau:
+         R2_ACCESS_KEY_ID=6487f07676de1a7a9db5eba9821e2783
+         R2_SECRET_ACCESS_KEY=ba4b0ced02839cfb14247a025fe99719f3ef7d5792a4eb32c64d9fda293998d1
+         R2_ENDPOINT=https://88af78b1abcb3e99aaa1d0fdfdacd9a3.r2.cloudflarestorage.com
+         R2_BUCKET_NAME=nihongo-sound-bucket
+         R2_PUBLIC_DOMAIN=https://pub-xxxxxx.r2.dev
+
+         Nhiệm vụ của bạn:
+         1. Hãy hướng dẫn tôi cách khai báo thư viện `minio_new` vào mục `dependencies` và sử dụng `dependency_overrides` với `http: ...` trong file `pubspec.yaml` để tránh lỗi xung đột phiên bản (Version Solving Failed).
+         2. Viết một file API hoàn chỉnh bằng Dart (ví dụ đặt tên là `audio_controller.dart`). File này sẽ đọc file `.env`, khởi tạo đối tượng `Minio` và định nghĩa một hàm Handler (hoặc Router của shelf) có tên là `generateUploadUrlHandler(Request request)`.
+         3. Logic trong hàm Handler phải thực hiện:
+            - Nhận gói JSON từ Frontend gửi lên để lấy tham số `fileName`. Nếu thiếu, trả về lỗi `400 Bad Request`.
+            - Tạo tên file độc nhất để lưu trên R2 nhằm tránh trùng lặp theo cấu trúc: `audios/${DateTime.now().millisecondsSinceEpoch}_$fileName`.
+            - Gọi hàm `minio.presignedPutObject` để sinh ra `uploadUrl` (phương thức PUT, thời gian hết hạn là 300 giây).
+            - Tạo đường link xem/nghe trực tuyến công khai vĩnh viễn thông qua CDN của Cloudflare theo cấu trúc: `fileUrl = '$R2_PUBLIC_DOMAIN/$uniqueFileName'`.
+            - Trả về mã `200 OK` với body JSON chứa 2 đường link `uploadUrl` và `fileUrl` nằm trong object `data`.
+         4. Bọc toàn bộ logic trong khối `try-catch` để xử lý lỗi hệ thống và trả về mã `500 Internal Server Error` nếu có sự cố xảy ra.
+
+         Hãy xuất ra mã nguồn Dart chi tiết, sạch sẽ, giải thích cách tích hợp nó vào luồng chạy chính của Server Shelf hiện tại, và cho tôi một ví dụ về cấu trúc JSON Response đầu ra.
+
+Phần X:
+Tôi đang viết tiếp tính năng cho file `audio_controller.dart` trong dự án Backend Dart (sử dụng thư viện `shelf` và `minio_new`). Hiện tại file của tôi đã có logic khởi tạo Minio Client bằng Factory Constructor và hàm cấp Pre-signed URL (`generateUploadUrlHandler`).
+
+Bây giờ, tôi muốn bổ sung thêm một hàm Handler mới tên là `deleteAudioHandler(Request request)` để phục vụ cho API xóa file khỏi Cloudflare R2 khi người dùng xóa thẻ Flashcard.
+
+Nhiệm vụ của bạn:
+Hãy viết bổ sung hàm `Future<Response> deleteAudioHandler(Request request) async` vào bên trong class `AudioController` với các yêu cầu kỹ thuật sau:
+1. Đọc gói dữ liệu JSON từ body của request do Frontend gửi lên để lấy tham số `fileUrl` (đường dẫn vĩnh viễn dạng: https://pub-xxx.r2.dev/audios/12345_test.mp3). Nếu thiếu tham số này, trả về mã lỗi `400 Bad Request`.
+2. Sử dụng thư viện lớp `Uri.parse(fileUrl)` để tự động trích xuất cấu trúc phần path (Object Key) của file trên R2. Hãy đảm bảo loại bỏ dấu gạch chéo ở đầu chuỗi (ví dụ biến đổi từ "/audios/12345_test.mp3" thành "audios/12345_test.mp3") để làm sạch khóa định danh. Kiểm tra nếu `objectKey` không hợp lệ hoặc không bắt đầu bằng cụm "audios/" thì trả về lỗi 400.
+3. Sử dụng đối tượng `minio` đã có sẵn trong class để gọi hàm `minio.removeObject(bucketName, objectKey)` nhằm ra lệnh xóa file trực tiếp trên Cloudflare R2.
+4. Bọc toàn bộ quá trình trong khối `try-catch`. Nếu thành công, trả về mã `200 OK` kèm JSON: `{"success": true, "message": "Đã xóa file khỏi Cloudflare R2 thành công!"}`. Nếu có lỗi hệ thống, trả về mã `500 Internal Server Error`.
+
+Hãy xuất ra đoạn mã bổ sung chi tiết hoặc toàn bộ file sau khi đã tích hợp hàm mới này một cách sạch sẽ.
+
+Phần XI:
+Tôi đang viết tiếp tính năng dọn rác chủ động thông qua một Route API cho file `audio_controller.dart` trong dự án Backend Dart (sử dụng thư viện `shelf`, `minio_new` và `supabase`).
+
+Hiện tại file của tôi đã có logic khởi tạo Minio Client bằng Factory Constructor, hàm cấp Pre-signed URL (`generateUploadUrlHandler`) và hàm xóa một file đơn lẻ (`deleteAudioHandler`).
+
+Bây giờ, thay vì chạy ngầm bằng Cron Job, tôi muốn bổ sung một hàm Handler có tên là `cleanupGarbageAudiosHandler(Request request, dynamic supabaseClient)` để đăng ký làm một Route API (ví dụ: POST /api/v1/audio/cleanup). Khi gọi API này, hệ thống sẽ quét, đối chiếu và dọn sạch các file rác trên Cloudflare R2 rồi trả về kết quả JSON chi tiết.
+
+Nhiệm vụ của bạn:
+Hãy viết bổ sung hàm `Future<Response> cleanupGarbageAudiosHandler(Request request, dynamic supabaseClient) async` vào bên trong class `AudioController` với các yêu cầu kỹ thuật sau:
+1. Sử dụng lệnh `minio.listObjects(bucketName, prefix: 'audios/', recursive: true)` để quét và lấy toàn bộ danh sách các file (`obj.key`) đang lưu trữ trong thư mục `audios/` trên Cloudflare R2. Gom tất cả vào một `List<String>`. Nếu R2 trống, trả về mã `200 OK` với JSON thông báo kho chứa trống, không có rác.
+2. Sử dụng `supabaseClient` được truyền vào để thực hiện lệnh truy vấn lấy toàn bộ dữ liệu cột `audio_url` từ bảng `flashcards` (cú pháp: `await supabaseClient.from('flashcards').select('audio_url')`).
+3. Duyệt qua kết quả từ Supabase, sử dụng `Uri.parse(audioUrl).path` để trích xuất ra phần Object Key sạch (xóa dấu gạch chéo `/` ở đầu bằng `substring(1)` nếu có) rồi lưu vào một `Set<String>` các file hợp lệ.
+4. Thực hiện lọc ra những file nào có tên trong danh sách của R2 nhưng KHÔNG nằm trong danh sách các key hợp lệ của Supabase Database. Đó chính là danh sách file rác cần xóa (`garbageKeys`). Nếu hệ thống sạch sẽ (không có rác), trả về mã `200 OK` thông báo hệ thống sạch sẽ.
+5. Nếu có file rác, gọi hàm xóa hàng loạt của Minio: `await minio.removeObjects(bucketName, garbageKeys)`.
+6. Trả về phản hồi `200 OK` với cấu trúc JSON chứa: `success: true`, `message: "Tiến trình dọn rác hoàn tất!"`, và một object `data` gồm các thông tin: `total_scanned_files` (tổng số file quét trên R2), `deleted_garbage_count` (số lượng file rác đã xóa), và `deleted_files` (mảng chứa danh sách các key file vừa bị xóa).
+7. Toàn bộ hàm bọc trong khối `try-catch` để xử lý lỗi hệ thống và trả về mã `500 Internal Server Error` nếu gặp sự cố.
+
+Hãy xuất ra đoạn mã bổ sung chi tiết hoặc toàn bộ file sau khi đã tích hợp hàm mới này một cách sạch sẽ và hướng dẫn tôi cách khai báo Route nhận tham số `supabaseClient` này ở file chạy chính `server.dart`.
