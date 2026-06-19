@@ -1,32 +1,35 @@
 import 'dart:convert';
 import 'package:shelf/shelf.dart';
-import 'package:minio_new/minio.dart';
+import 'package:minio_new/minio.dart' as minio_lib;
 import 'package:dotenv/dotenv.dart';
 
 class AudioController {
-  late final Minio minio;
+  late final minio_lib.Minio minio;
   final String bucketName;
   final String publicDomain;
 
-  /// Factory constructor
+  /// Factory constructor để tối ưu hóa việc nạp file .env đúng 1 lần duy nhất
   factory AudioController() {
     final env = DotEnv()..load();
     return AudioController._internal(env);
   }
 
+  /// Hàm khởi tạo nội bộ nhận dữ liệu env đã được nạp sẵn
   AudioController._internal(DotEnv env)
       : bucketName = env['R2_BUCKET_NAME'] ?? '',
         publicDomain = env['R2_PUBLIC_DOMAIN'] ?? '' {
     
-    minio = Minio(
+    // Khởi tạo Minio Client để kết nối với Cloudflare R2
+    minio = minio_lib.Minio(
       endPoint: (env['R2_ENDPOINT'] ?? '').replaceFirst('https://', ''),
       accessKey: env['R2_ACCESS_KEY_ID'] ?? '',
       secretKey: env['R2_SECRET_ACCESS_KEY'] ?? '',
       useSSL: true,
-      region: 'auto', // 🌟 Quay lại 'auto' theo khuyến nghị của Cloudflare
+      region: 'auto', // Tối ưu cho Cloudflare R2
     );
   }
 
+  /// Hàm Handler cấp Pre-signed URL
   Future<Response> generateUploadUrlHandler(Request request) async {
     try {
       final body = jsonDecode(await request.readAsString());
@@ -39,15 +42,17 @@ class AudioController {
         );
       }
 
+      // Tạo tên file độc nhất: audios/1718534000_audio.mp3
       final uniqueFileName = 'audios/${DateTime.now().millisecondsSinceEpoch}_$fileName';
 
-      // 1. Sinh ra Pre-signed URL "Sạch" (Không thêm tham số thủ công vào URL)
+      // Sinh ra uploadUrl (Phương thức PUT, thời gian 300s)
       final String uploadUrl = await minio.presignedPutObject(
         bucketName,
         uniqueFileName,
         expires: 300,
       );
 
+      // Tạo đường link xem trực tuyến công khai
       final String fileUrl = '$publicDomain/$uniqueFileName';
 
       return Response.ok(
@@ -63,12 +68,16 @@ class AudioController {
       );
     } catch (e) {
       return Response.internalServerError(
-        body: jsonEncode({'success': false, 'message': 'Lỗi hệ thống: ${e.toString()}'}),
+        body: jsonEncode({
+          'success': false, 
+          'message': 'Lỗi hệ thống khi sinh URL: ${e.toString()}'
+        }),
         headers: {'content-type': 'application/json'},
       );
     }
   }
 
+  /// Hàm Handler xóa file khỏi Cloudflare R2
   Future<Response> deleteAudioHandler(Request request) async {
     try {
       final body = jsonDecode(await request.readAsString());
@@ -81,36 +90,44 @@ class AudioController {
         );
       }
 
+      // 1. Trích xuất Object Key từ URL
       final uri = Uri.parse(fileUrl);
-      String objectKey = uri.path.startsWith('/') ? uri.path.substring(1) : uri.path;
+      String objectKey = uri.path;
 
-      if (!objectKey.startsWith('audios/')) {
+      // Loại bỏ dấu gạch chéo ở đầu nếu có
+      if (objectKey.startsWith('/')) {
+        objectKey = objectKey.substring(1);
+      }
+
+      // Kiểm tra tính hợp lệ của objectKey
+      if (objectKey.isEmpty || !objectKey.startsWith('audios/')) {
         return Response.badRequest(
-          body: jsonEncode({'success': false, 'message': 'Đường dẫn không hợp lệ!'}),
+          body: jsonEncode({
+            'success': false, 
+            'message': 'Đường dẫn file không hợp lệ hoặc không thuộc thư mục audios!'
+          }),
           headers: {'content-type': 'application/json'},
         );
       }
 
+      // 2. Thực hiện lệnh xóa trên Cloudflare R2
       await minio.removeObject(bucketName, objectKey);
 
       return Response.ok(
-        jsonEncode({'success': true, 'message': 'Đã xóa file thành công!'}),
+        jsonEncode({
+          'success': true,
+          'message': 'Đã xóa file khỏi Cloudflare R2 thành công!'
+        }),
         headers: {'content-type': 'application/json'},
       );
     } catch (e) {
       return Response.internalServerError(
-        body: jsonEncode({'success': false, 'message': e.toString()}),
+        body: jsonEncode({
+          'success': false, 
+          'message': 'Lỗi hệ thống khi xóa file: ${e.toString()}'
+        }),
         headers: {'content-type': 'application/json'},
       );
     }
-  }
-
-  // Tạm thời vô hiệu hóa logic cleanup gây lỗi maxKeys trên minio_new 
-  // hoặc dùng logic đơn giản hơn nếu cần.
-  Future<Response> cleanupGarbageAudiosHandler(Request request, dynamic supabaseClient) async {
-    return Response.ok(
-      jsonEncode({'success': true, 'message': 'Tính năng dọn rác đang được bảo trì cho thư viện cũ.'}),
-      headers: {'content-type': 'application/json'},
-    );
   }
 }

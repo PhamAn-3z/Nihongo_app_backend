@@ -128,7 +128,7 @@ void main() async {
   router.mount('/api/v1/vnpay', vnpayRoutes(vnpayController));
   router.mount('/api/v1/decks', deckRoutes(deckController));
   router.mount('/api/v1/comments', commentRoutes(deckController));
-  router.mount('/api/v1/audio', audioRoutes(audioController, supabaseClient)); // Thêm tham số supabaseClient
+  router.mount('/api/v1/audio', audioRoutes(audioController)); // Xóa tham số supabaseClient
 
   // 5. Route được bảo vệ (Yêu cầu JWT Token)
   router.get('/api/v1/user/profile', (Request request) {
