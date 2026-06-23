@@ -402,3 +402,41 @@ Hãy viết bổ sung hàm `Future<Response> cleanupGarbageAudiosHandler(Request
 7. Toàn bộ hàm bọc trong khối `try-catch` để xử lý lỗi hệ thống và trả về mã `500 Internal Server Error` nếu gặp sự cố.
 
 Hãy xuất ra đoạn mã bổ sung chi tiết hoặc toàn bộ file sau khi đã tích hợp hàm mới này một cách sạch sẽ và hướng dẫn tôi cách khai báo Route nhận tham số `supabaseClient` này ở file chạy chính `server.dart`.
+
+Phần XII:
+Tôi đang phát triển tính năng Bulk Import bộ đề cho dự án Backend Dart (sử dụng thư viện `shelf` và `supabase`). Hệ thống của tôi được thiết kế theo kiến trúc Ma trận đa chiều (Matrix-based Flashcard System) nhằm cho phép người dùng tự do cấu hình các hàng thuộc tính.
+
+Dữ liệu được quản lý qua 3 bảng lõi trong Supabase:
+1. Bảng `groups` định nghĩa các HÀNG thuộc tính (ví dụ: Chữ Kanji, Cách đọc Hiragana).
+2. Bảng `positions` định nghĩa số thứ tự các CỘT (Mỗi `position_id` tương đương một thẻ Flashcard vật lý).
+3. Bảng `terms` là ô giao điểm nằm tại tọa độ của một Hàng (`group_id`) và một Cột (`position_id`), chứa cột dữ liệu `content` kiểu `jsonb`.
+
+Để tối ưu, Frontend Flutter đã tải trước file vật lý lên mây (Cloudinary cho ảnh, Cloudflare R2 cho audio) và gom trọn gói thông tin của từng ô thành một Object chứa cả chữ và link media trước khi gửi lên Backend dưới cấu trúc JSON mẫu sau:
+{
+  "deckTitle": "Từ vựng Soumatome N3",
+  "publicStatus": "public",
+  "parentId": null,
+  "headers": [
+    { "key": "kanji", "name": "Chữ Kanji", "position": 1 },
+    { "key": "hiragana", "name": "Cách đọc Hiragana", "position": 2 }
+  ],
+  "rows": [
+    {
+      "kanji": { "text": "魚", "image_url": "https://res.cloudinary.com/...", "audio_url": "https://pub-..." },
+      "hiragana": { "text": "さかな", "image_url": null, "audio_url": null }
+    }
+  ]
+}
+
+Nhiệm vụ của bạn:
+Hãy viết lại hoặc chỉnh sửa hàm Route API Handler xử lý import (ví dụ: `importTrueMatrixDeckHandler(Request request, dynamic supabaseClient)`) để hiện thực hóa luồng xử lý bảo toàn ma trận này:
+1. Thực hiện chèn thông tin bộ đề vào bảng `decks` lấy `deck_id`.
+2. Duyệt qua mảng `headers` để tạo các hàng thuộc tính tương ứng trong bảng `groups`. Đồng thời, lưu lại một Bản đồ ánh xạ (`Map<String, int> groupMap`) giữa `header['key']` và `group_id` vừa sinh ra tự động để tra cứu ở bước sau.
+3. Duyệt qua mảng `rows`. Với mỗi hàng dữ liệu (mỗi thẻ bài):
+   - Chèn một bản ghi mới vào bảng `positions` với cột `deck_id` và `col_index` tự tăng để lấy ra `position_id` đại diện cho thẻ đó.
+   - Tiếp tục chạy một vòng lặp phụ duyệt qua từng ô giao điểm (cặp Key-Value) bên trong hàng đó (ví dụ: entry của "kanji", entry của "hiragana").
+   - Dựa vào Key, tra cứu trong `groupMap` để lấy ra `group_id` chính xác của hàng thuộc tính đó.
+   - Tiến hành câu lệnh chèn (Insert) vào bảng `terms` tại đúng tọa độ (`group_id`, `position_id`) hiện tại. Dữ liệu đút vào cột `content` dạng `jsonb` sẽ lấy trọn gói Object của ô đó bao gồm: `text`, `image_url`, và `audio_url`.
+4. Bọc toàn bộ mã nguồn trong khối `try-catch` để xử lý ngoại lệ và đảm bảo trả về HTTP Response dạng JSON (`200 OK` nếu thành công, `500 Internal Server Error` kèm thông báo chi tiết nếu gặp sự cố).
+
+Hãy xuất ra đoạn mã xử lý Dart hoàn chỉnh, scannable, viết code sạch sẽ rõ ràng để tôi tích hợp ngay vào controller của mình.

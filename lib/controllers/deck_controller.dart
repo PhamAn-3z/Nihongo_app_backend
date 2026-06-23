@@ -18,25 +18,15 @@ class DeckController {
       final dynamic userId = payload['userId'];
       final body = jsonDecode(await request.readAsString());
 
-      final String deckTitle = body['deckTitle'];
-      final String publicStatus = body['publicStatus'] ?? 'private';
-      final int? parentId = body['parentId'];
-      final List<dynamic> headers = body['headers'];
-      final List<dynamic> rows = body['rows'];
-
-      final result = await _deckService.bulkImportCreateDeck(
+      final result = await _deckService.fullBulkImport(
         userId: userId,
-        title: deckTitle,
-        publicStatus: publicStatus,
-        parentId: parentId,
-        headers: headers.cast<Map<String, dynamic>>(),
-        rows: rows.cast<Map<String, dynamic>>(),
+        payload: body,
       );
 
       return Response.ok(
         jsonEncode({
           "success": true,
-          "message": "Khởi tạo bộ đề và cấu hình lộ trình học cá nhân hóa thành công!",
+          "message": "Import dữ liệu bộ đề (Text/Image/Audio) thành công!",
           "data": result
         }),
         headers: {'content-type': 'application/json'},

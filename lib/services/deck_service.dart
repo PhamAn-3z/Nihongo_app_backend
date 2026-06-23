@@ -26,6 +26,20 @@ class DeckService {
     );
   }
 
+  Future<Map<String, dynamic>> fullBulkImport({
+    required dynamic userId,
+    required Map<String, dynamic> payload,
+  }) async {
+    return await bulkImportCreateDeck(
+      userId: userId,
+      title: payload['deckTitle'],
+      publicStatus: payload['publicStatus'] ?? 'private',
+      parentId: payload['parentId'],
+      headers: List<Map<String, dynamic>>.from(payload['headers']),
+      rows: List<Map<String, dynamic>>.from(payload['rows']),
+    );
+  }
+
   Future<List<dynamic>> getAllDecks() async {
     return await _deckRepository.getAllDecks();
   }

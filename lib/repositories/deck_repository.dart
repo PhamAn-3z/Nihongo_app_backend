@@ -88,36 +88,30 @@ class DeckRepository {
             final dynamic value = rowData[key];
             Map<String, dynamic> contentNode;
 
-            if (value is Map<String, dynamic>) {
-              // Trường hợp 1: Frontend chủ động gửi Object {text, audio_url, image_url}
+            // Xử lý linh hoạt dựa trên kiểu dữ liệu gửi lên
+            if (value is Map) {
+              // TRƯỜNG HỢP 1: Frontend gửi Object đầy đủ {"text": "...", "image_url": "...", "audio_url": "..."}
               contentNode = {
-                'text': value['text'] ?? '',
-                'audio_url': value['audio_url'],
-                'image_url': value['image_url'],
+                'text': value['text']?.toString() ?? '',
+                'image_url': value['image_url']?.toString(),
+                'audio_url': value['audio_url']?.toString(),
               };
-            } else {
-              final String valStr = value?.toString() ?? '';
+            } else if (value is String) {
+              final String valStr = value.trim();
               
-              // Trường hợp 2: Kiểm tra nếu là link audio từ Cloudflare R2 hoặc file âm thanh
-              final bool isAudio = valStr.startsWith('http') && 
-                                  (valStr.contains('r2.dev') || 
-                                   valStr.toLowerCase().endsWith('.mp3') || 
-                                   valStr.toLowerCase().endsWith('.wav'));
+              // TRƯỜNG HỢP 2: Nhận diện link thông minh
+              final bool isAudio = valStr.contains('r2.dev') || valStr.toLowerCase().endsWith('.mp3');
+              final bool isImage = valStr.contains('cloudinary.com') || valStr.toLowerCase().endsWith('.jpg');
 
               if (isAudio) {
-                contentNode = {
-                  'text': '', 
-                  'audio_url': valStr,
-                  'image_url': null
-                };
+                contentNode = {'text': '', 'audio_url': valStr, 'image_url': null};
+              } else if (isImage) {
+                contentNode = {'text': '', 'audio_url': null, 'image_url': valStr};
               } else {
-                // Trường hợp 3: Văn bản bình thường
-                contentNode = {
-                  'text': valStr,
-                  'audio_url': null,
-                  'image_url': null
-                };
+                contentNode = {'text': valStr, 'audio_url': null, 'image_url': null};
               }
+            } else {
+              contentNode = {'text': value?.toString() ?? '', 'audio_url': null, 'image_url': null};
             }
 
             termsToInsert.add({
