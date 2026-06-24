@@ -46,6 +46,12 @@ import 'package:flashcard_quiz_backend/controllers/deck_controller.dart';
 import 'package:flashcard_quiz_backend/routes/deck_routes.dart';
 import 'package:flashcard_quiz_backend/routes/comment_routes.dart';
 
+// Import Notifications
+import 'package:flashcard_quiz_backend/repositories/notification_repository.dart';
+import 'package:flashcard_quiz_backend/services/notification_service.dart';
+import 'package:flashcard_quiz_backend/controllers/notification_controller.dart';
+import 'package:flashcard_quiz_backend/routes/notification_routes.dart';
+
 import 'package:flashcard_quiz_backend/middlewares/auth_middleware.dart';
 import 'package:flashcard_quiz_backend/middlewares/cors_middleware.dart';
 
@@ -67,12 +73,12 @@ void main() async {
 
   // 2. Khởi tạo các thành phần (Dependency Injection)
   final userRepository = UserRepository(supabaseClient);
-  final authService = AuthService(userRepository);
+  final userStatsRepository = UserStatsRepository(supabaseClient);
+  final authService = AuthService(userRepository, userStatsRepository);
 
   final membershipRepository = MembershipRepository(supabaseClient);
   final promoCodeRepository = PromoCodeRepository(supabaseClient);
   final receiptRepository = ReceiptRepository(supabaseClient);
-  final userStatsRepository = UserStatsRepository(supabaseClient);
 
   // Services
   final membershipService = MembershipService(membershipRepository);
@@ -81,6 +87,7 @@ void main() async {
     receiptRepository,
     membershipRepository,
     promoCodeRepository,
+    userStatsRepository,
   );
   final userStatsService = UserStatsService(userStatsRepository);
   final vnpayService = VnPayService();
@@ -99,8 +106,10 @@ void main() async {
   final vnpayController = VnPayController(vnpayService, receiptService);
   final deckController = DeckController(deckService);
 
-
-
+  // Notification Layer
+  final notificationRepository = NotificationRepository(supabaseClient);
+  final notificationService = NotificationService(notificationRepository);
+  final notificationController = NotificationController(notificationService);
 
   // 2.1 Start Background Cleanup Task (Every 5 minutes)
   Timer.periodic(Duration(minutes: 30), (timer) async {
@@ -125,6 +134,7 @@ void main() async {
   router.mount('/api/v1/vnpay', vnpayRoutes(vnpayController));
   router.mount('/api/v1/decks', deckRoutes(deckController));
   router.mount('/api/v1/comments', commentRoutes(deckController));
+  router.mount('/api/v1/notifications', notificationRoutes(notificationController));
 
   // 5. Route được bảo vệ (Yêu cầu JWT Token)
   router.get('/api/v1/user/profile', (Request request) {
@@ -146,6 +156,7 @@ void main() async {
           request.url.path.contains('api/v1/decks') ||
           request.url.path.contains('api/v1/comments') ||
           request.url.path.contains('api/v1/user') ||
+          request.url.path.contains('api/v1/notifications') ||
           request.url.path.endsWith('auth/logout')) {
         return authMiddleware()(innerHandler)(request);
       }

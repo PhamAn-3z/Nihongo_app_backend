@@ -31,6 +31,14 @@ class MembershipService {
       throw Exception('maxFlashcardSet cannot be negative');
     }
 
+    if (data['Duration'] is! int) {
+      throw Exception('Duration must be an integer');
+    }
+
+    if (data['Duration'] <= 0) {
+      throw Exception('Duration must be greater than zero');
+    }
+
     return await membershipRepository.createMembership(data);
   }
 
@@ -43,6 +51,11 @@ class MembershipService {
     }
     if (data.containsKey('maxFlashcardSet') && data['maxFlashcardSet'] < 0) {
       throw Exception('Invalid max flashcard set');
+    }
+    if (data.containsKey('Duration')) {
+      if (data['Duration'] is! int || data['Duration'] <= 0) {
+        throw Exception('Duration must be an integer greater than zero');
+      }
     }
     return await membershipRepository.updateMembership(id, data);
   }

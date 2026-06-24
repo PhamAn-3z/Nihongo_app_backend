@@ -1,16 +1,19 @@
 import '../repositories/receipt_repository.dart';
 import '../repositories/membership_repository.dart';
 import '../repositories/promo_code_repository.dart';
+import '../repositories/user_stats_repository.dart';
 
 class ReceiptService {
   final ReceiptRepository receiptRepository;
   final MembershipRepository membershipRepository;
   final PromoCodeRepository promoCodeRepository;
+  final UserStatsRepository userStatsRepository;
 
   ReceiptService(
     this.receiptRepository,
     this.membershipRepository,
     this.promoCodeRepository,
+    this.userStatsRepository,
   );
 
   Future<List<Map<String, dynamic>>> getByUserId(int userId) async {
@@ -63,7 +66,31 @@ class ReceiptService {
   }
 
   Future<Map<String, dynamic>> markAsPaid(int id) async {
-    return await receiptRepository.updatePaymentStatus(id, true);
+    final updatedReceipt = await receiptRepository.updatePaymentStatus(id, true);
+
+    final userId = updatedReceipt['user_id'];
+    final membershipId = updatedReceipt['membershipId'];
+
+    if (userId != null && membershipId != null) {
+      final membership = await membershipRepository.getMembershipById(int.parse(membershipId.toString()));
+      if (membership != null) {
+        final durationRaw = membership['Duration'];
+        if (durationRaw != null) {
+          final int durationDays = int.tryParse(durationRaw.toString()) ?? 30;
+          final expiredDate = DateTime.now().add(Duration(days: durationDays));
+
+          await userStatsRepository.updateStats(
+            int.parse(userId.toString()),
+            {
+              'membership_id': int.parse(membershipId.toString()),
+              'membership_expired_date': expiredDate.toIso8601String(),
+            },
+          );
+        }
+      }
+    }
+
+    return updatedReceipt;
   }
 
   Future<Map<String, dynamic>> update(int id, Map<String, dynamic> data) async {

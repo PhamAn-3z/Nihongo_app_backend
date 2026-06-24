@@ -38,13 +38,14 @@ CREATE TABLE public.user_stats (
   membership_id integer DEFAULT 1,
   is_active boolean DEFAULT true,
   last_study_date date,
+  membership_expired_date timestamp without time zone,
   CONSTRAINT user_stats_pkey PRIMARY KEY (user_id),
   CONSTRAINT user_stats_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(user_id),
   CONSTRAINT user_stats_membership_id_fkey FOREIGN KEY (membership_id) REFERENCES public.Membership(id)
 );
 CREATE TABLE public.Membership (
   id integer NOT NULL DEFAULT nextval('"Membership_id_seq"'::regclass),
-  Duration character varying NOT NULL,
+  Duration integer NOT NULL,
   membershipRank character varying NOT NULL,
   price double precision NOT NULL,
   maxFlashcardSet integer NOT NULL,

@@ -1,11 +1,13 @@
 import '../repositories/user_repository.dart';
+import '../repositories/user_stats_repository.dart';
 import '../services/jwt_service.dart';
 import '../utils/password_utils.dart';
 
 class AuthService {
   final UserRepository userRepository;
+  final UserStatsRepository userStatsRepository;
 
-  AuthService(this.userRepository);
+  AuthService(this.userRepository, this.userStatsRepository);
 
   Future<Map<String, dynamic>?> register({
     required String email,
@@ -28,6 +30,21 @@ class AuthService {
       'username': username,
       'created_at': DateTime.now().toIso8601String(),
     });
+
+    final userId = newUser['user_id'];
+    if (userId != null) {
+      await userStatsRepository.createUserStats({
+        'user_id': int.parse(userId.toString()),
+        'current_streak': null,
+        'max_streak': null,
+        'total_exp': null,
+        'membership_id': 6,
+        'is_active': null,
+        'isActive': null,
+        'last_study_date': null,
+        'membership_expired_date': null,
+      });
+    }
 
     return newUser;
   }

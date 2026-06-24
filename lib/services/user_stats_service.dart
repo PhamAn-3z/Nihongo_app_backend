@@ -25,6 +25,7 @@ class UserStatsService {
       'membership_id': 1,
       'isActive': true,
       'last_study_date': null,
+      'membership_expired_date': null,
     });
   }
 }
