@@ -13,7 +13,8 @@ dependencies:
   dart_jsonwebtoken: ^2.12.2
   dotenv: ^4.2.0
   crypto: ^3.0.3
-  intl: ^0.20.2
+  mailer: ^6.1.0
+  uuid: ^4.4.0
 
 dev_dependencies:
   http: ^1.2.2

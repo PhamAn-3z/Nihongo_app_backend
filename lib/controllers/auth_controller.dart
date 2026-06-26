@@ -46,9 +46,10 @@ class AuthController {
         },
       );
     } catch (e) {
-      return Response.internalServerError(
+      return Response(
+        e.toString().contains('verify your email') ? 403 : 500,
         body: jsonEncode({
-          'message': e.toString(),
+          'message': e.toString().replaceAll('Exception: ', ''),
         }),
         headers: {'Content-Type': 'application/json'},
       );
@@ -79,7 +80,7 @@ class AuthController {
 
       return Response.ok(
         jsonEncode({
-          'message': 'User registered successfully',
+          'message': 'User registered successfully. Please check your email for verification OTP.',
           'user': {
             'id': user?['user_id'],
             'email': user?['email'],
@@ -93,14 +94,74 @@ class AuthController {
     } catch (e) {
       return Response.internalServerError(
         body: jsonEncode({
-          'message': e.toString(),
+          'message': e.toString().replaceAll('Exception: ', ''),
         }),
         headers: {'Content-Type': 'application/json'},
       );
     }
   }
 
-  // Thêm API Logout
+  Future<Response> verifyOtp(Request request) async {
+    try {
+      final body = await request.readAsString();
+      final data = jsonDecode(body);
+
+      final email = data['email'];
+      final otp = data['otp'];
+
+      if (email == null || otp == null) {
+        return Response.badRequest(
+          body: jsonEncode({'message': 'Email and OTP are required'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      await authService.verifyOtp(email: email, otp: otp);
+
+      return Response.ok(
+        jsonEncode({'message': 'Email verified successfully. You can now login.'}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e) {
+      return Response.badRequest(
+        body: jsonEncode({
+          'message': e.toString().replaceAll('Exception: ', ''),
+        }),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+  }
+
+  Future<Response> resendOtp(Request request) async {
+    try {
+      final body = await request.readAsString();
+      final data = jsonDecode(body);
+
+      final email = data['email'];
+
+      if (email == null) {
+        return Response.badRequest(
+          body: jsonEncode({'message': 'Email is required'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      await authService.resendOtp(email);
+
+      return Response.ok(
+        jsonEncode({'message': 'Verification OTP resent to your email.'}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e) {
+      return Response.badRequest(
+        body: jsonEncode({
+          'message': e.toString().replaceAll('Exception: ', ''),
+        }),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+  }
+
   Future<Response> logout(Request request) async {
     return Response.ok(
       jsonEncode({'message': 'Logged out successfully'}),

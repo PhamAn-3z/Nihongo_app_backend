@@ -16,11 +16,11 @@ class UserRepository {
     return response;
   }
 
-  // Tìm user theo user_id
+  // Tìm user theo user_id (Lấy luôn thông tin từ bảng user_profiles nếu có)
   Future<Map<String, dynamic>?> findById(String userId) async {
     final response = await supabase
         .from('users')
-        .select()
+        .select('*, user_profiles(*)')
         .eq('user_id', userId)
         .maybeSingle();
 
@@ -35,5 +35,47 @@ class UserRepository {
         .select()
         .single();
     return response;
+  }
+
+  // Cập nhật email_verified = true
+  Future<void> markEmailAsVerified(int userId) async {
+    await supabase
+        .from('users')
+        .update({'email_verified': true})
+        .eq('user_id', userId);
+  }
+
+  // Cập nhật hoặc tạo mới profile (Hỗ trợ cập nhật từng phần)
+  Future<Map<String, dynamic>> updateProfile(String userId, Map<String, dynamic> profileData) async {
+    // Kiểm tra xem đã có profile chưa
+    final existing = await supabase
+        .from('user_profiles')
+        .select()
+        .eq('user_id', userId)
+        .maybeSingle();
+
+    if (existing == null) {
+      // Nếu chưa có thì insert mới
+      return await supabase
+          .from('user_profiles')
+          .insert({
+            'user_id': userId,
+            ...profileData,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .select()
+          .single();
+    } else {
+      // Nếu đã có thì update (chỉ cập nhật các field được gửi lên, các field khác giữ nguyên)
+      return await supabase
+          .from('user_profiles')
+          .update({
+            ...profileData,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('user_id', userId)
+          .select()
+          .single();
+    }
   }
 }
