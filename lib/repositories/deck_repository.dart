@@ -85,10 +85,39 @@ class DeckRepository {
         // Tạo terms cho từng group trong row
         groupMap.forEach((key, groupId) {
           if (rowData.containsKey(key)) {
+            final dynamic value = rowData[key];
+            Map<String, dynamic> contentNode;
+
+            // Xử lý linh hoạt dựa trên kiểu dữ liệu gửi lên
+            if (value is Map) {
+              // TRƯỜNG HỢP 1: Frontend gửi Object đầy đủ {"text": "...", "image_url": "...", "audio_url": "..."}
+              contentNode = {
+                'text': value['text']?.toString() ?? '',
+                'image_url': value['image_url']?.toString(),
+                'audio_url': value['audio_url']?.toString(),
+              };
+            } else if (value is String) {
+              final String valStr = value.trim();
+              
+              // TRƯỜNG HỢP 2: Nhận diện link thông minh
+              final bool isAudio = valStr.contains('r2.dev') || valStr.toLowerCase().endsWith('.mp3');
+              final bool isImage = valStr.contains('cloudinary.com') || valStr.toLowerCase().endsWith('.jpg');
+
+              if (isAudio) {
+                contentNode = {'text': '', 'audio_url': valStr, 'image_url': null};
+              } else if (isImage) {
+                contentNode = {'text': '', 'audio_url': null, 'image_url': valStr};
+              } else {
+                contentNode = {'text': valStr, 'audio_url': null, 'image_url': null};
+              }
+            } else {
+              contentNode = {'text': value?.toString() ?? '', 'audio_url': null, 'image_url': null};
+            }
+
             termsToInsert.add({
               'group_id': groupId,
               'position_id': positionId,
-              'content': {'text': rowData[key].toString()},
+              'content': contentNode,
             });
           }
         });
