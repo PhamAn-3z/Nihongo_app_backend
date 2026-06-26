@@ -16,6 +16,17 @@ class UserRepository {
     return response;
   }
 
+  // Tìm user theo username
+  Future<Map<String, dynamic>?> findByUsername(String username) async {
+    final response = await supabase
+        .from('users')
+        .select()
+        .eq('username', username)
+        .maybeSingle();
+
+    return response;
+  }
+
   // Tìm user theo user_id (Lấy luôn thông tin từ bảng user_profiles nếu có)
   Future<Map<String, dynamic>?> findById(String userId) async {
     final response = await supabase

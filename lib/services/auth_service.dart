@@ -22,15 +22,21 @@ class AuthService {
     required String username,
   }) async {
     // 1. Kiểm tra xem email đã tồn tại chưa
-    final existingUser = await userRepository.findByEmail(email);
-    if (existingUser != null) {
+    final existingUserByEmail = await userRepository.findByEmail(email);
+    if (existingUserByEmail != null) {
       throw Exception('Email already exists');
     }
 
-    // 2. Mã hóa mật khẩu
+    // 2. Kiểm tra xem username đã tồn tại chưa
+    final existingUserByUsername = await userRepository.findByUsername(username);
+    if (existingUserByUsername != null) {
+      throw Exception('Username already exists');
+    }
+
+    // 3. Mã hóa mật khẩu
     final hashedPassword = PasswordUtils.hashPassword(password);
 
-    // 3. Lưu user vào DB
+    // 4. Lưu user vào DB
     final newUser = await userRepository.createUser({
       'email': email,
       'password_hash': hashedPassword,
@@ -41,18 +47,18 @@ class AuthService {
 
     final userId = newUser['user_id'] as int;
 
-    // 4. Tạo mã OTP
+    // 5. Tạo mã OTP
     final otp = OtpUtils.generateOtp();
     final expiresAt = DateTime.now().add(const Duration(minutes: 5));
 
-    // 5. Lưu OTP vào bảng email_verifications
+    // 6. Lưu OTP vào bảng email_verifications
     await emailVerificationRepository.createVerification(
       userId: userId,
       otpCode: otp,
       expiresAt: expiresAt,
     );
 
-    // 6. Gửi email OTP
+    // 7. Gửi email OTP
     try {
       await emailService.sendVerificationOtp(email, otp);
     } catch (e) {

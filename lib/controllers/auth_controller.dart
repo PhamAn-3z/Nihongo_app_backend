@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:shelf/shelf.dart';
 
 import '../services/auth_service.dart';
+import '../utils/password_utils.dart';
 
 class AuthController {
   final AuthService authService;
@@ -63,11 +64,31 @@ class AuthController {
 
       final email = data['email'];
       final password = data['password'];
+      final confirmedPassword = data['confirmed_password'];
       final username = data['username'];
 
-      if (email == null || password == null || username == null) {
+      // 1. Kiểm tra các trường bắt buộc
+      if (email == null || password == null || confirmedPassword == null || username == null) {
         return Response.badRequest(
-          body: jsonEncode({'message': 'Email, password, and username are required'}),
+          body: jsonEncode({'message': 'Email, password, confirmed_password, and username are required'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      // 2. Kiểm tra mật khẩu khớp nhau
+      if (password != confirmedPassword) {
+        return Response.badRequest(
+          body: jsonEncode({'message': 'Passwords do not match'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      // 3. Kiểm tra độ mạnh của mật khẩu
+      if (!PasswordUtils.isStrongPassword(password)) {
+        return Response.badRequest(
+          body: jsonEncode({
+            'message': 'Password must be at least 8 characters long, include uppercase, lowercase letters and numbers'
+          }),
           headers: {'Content-Type': 'application/json'},
         );
       }
@@ -92,9 +113,19 @@ class AuthController {
         },
       );
     } catch (e) {
+      final errorMsg = e.toString().replaceAll('Exception: ', '');
+      
+      // Kiểm tra nếu là lỗi đã tồn tại (email hoặc username)
+      if (errorMsg.contains('already exists')) {
+        return Response.badRequest(
+          body: jsonEncode({'message': errorMsg}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
       return Response.internalServerError(
         body: jsonEncode({
-          'message': e.toString().replaceAll('Exception: ', ''),
+          'message': errorMsg,
         }),
         headers: {'Content-Type': 'application/json'},
       );
