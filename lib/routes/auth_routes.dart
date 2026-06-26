@@ -13,5 +13,11 @@ Router authRoutes(AuthController controller) {
   // API Đăng xuất: POST /api/v1/auth/logout
   router.post('/logout', controller.logout);
 
+  // API Xác thực OTP: POST /api/v1/auth/verify-otp
+  router.post('/verify-otp', controller.verifyOtp);
+
+  // API Gửi lại OTP: POST /api/v1/auth/resend-otp
+  router.post('/resend-otp', controller.resendOtp);
+
   return router;
 }
