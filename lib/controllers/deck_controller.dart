@@ -72,9 +72,11 @@ class DeckController {
         }),
         headers: {'content-type': 'application/json'},
       );
-    } catch (e) {
+    } catch (e, stack) {
+      print('❌ Error in getUserDecksTree: $e');
+      print('Stack trace: $stack');
       return Response.internalServerError(
-        body: jsonEncode({"success": false, "message": e.toString()}),
+        body: jsonEncode({"success": false, "message": "Lỗi hệ thống: ${e.toString()}"}),
         headers: {'content-type': 'application/json'},
       );
     }
@@ -306,6 +308,83 @@ class DeckController {
           "success": false, 
           "message": "Hành động không hợp lệ! Bạn phải lưu bộ đề này trước khi thay đổi trạng thái yêu thích."
         }),
+        headers: {'content-type': 'application/json'},
+      );
+    }
+  }
+
+  Future<Response> getExploreDecks(Request request) async {
+    try {
+      final queryParams = request.url.queryParameters;
+      final String? search = queryParams['search'];
+      final String sortBy = queryParams['sort_by'] ?? 'trending';
+      final int page = int.tryParse(queryParams['page'] ?? '1') ?? 1;
+      final int limit = int.tryParse(queryParams['limit'] ?? '10') ?? 10;
+
+      final decks = await _deckService.getExploreDecks(
+        search: search,
+        sortBy: sortBy,
+        page: page,
+        limit: limit,
+      );
+
+      return Response.ok(
+        jsonEncode({
+          "success": true,
+          "page": page,
+          "limit": limit,
+          "data": decks
+        }),
+        headers: {'content-type': 'application/json'},
+      );
+    } catch (e) {
+      return Response.internalServerError(
+        body: jsonEncode({"success": false, "message": "Lỗi hệ thống: ${e.toString()}"}),
+        headers: {'content-type': 'application/json'},
+      );
+    }
+  }
+
+  Future<Response> saveDeckLinkHandler(Request request) async {
+    try {
+      final body = jsonDecode(await request.readAsString());
+      
+      // Đọc user_id và deck_id từ body theo yêu cầu phần XVI
+      final dynamic userId = body['user_id'];
+      final dynamic deckIdValue = body['deck_id'];
+
+      if (userId == null || deckIdValue == null) {
+        return Response.badRequest(
+          body: jsonEncode({'success': false, 'message': 'Thiếu tham số user_id hoặc deck_id!'}),
+          headers: {'content-type': 'application/json'},
+        );
+      }
+
+      final int deckId = deckIdValue is String ? int.parse(deckIdValue) : deckIdValue as int;
+
+      await _deckService.saveDeckLink(
+        userId: userId,
+        deckId: deckId,
+      );
+
+      return Response.ok(
+        jsonEncode({
+          "success": true, 
+          "message": "Đã lưu liên kết bộ đề vào thư viện thành công!"
+        }),
+        headers: {'content-type': 'application/json'},
+      );
+    } catch (e) {
+      // Xử lý lỗi trùng lặp (Unique Constraint) hoặc lỗi hệ thống khác
+      String message = "Lỗi hệ thống khi lưu bộ đề.";
+      if (e.toString().contains('duplicate key')) {
+        message = "Bạn đã lưu bộ đề này vào thư viện rồi!";
+      } else {
+        message = e.toString();
+      }
+
+      return Response.internalServerError(
+        body: jsonEncode({"success": false, "message": message}),
         headers: {'content-type': 'application/json'},
       );
     }

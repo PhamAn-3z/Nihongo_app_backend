@@ -157,34 +157,44 @@ class DeckRepository {
   }
 
   Future<List<Map<String, dynamic>>> getUserDecks(int userId) async {
-    // Truy vấn bốc toàn bộ thông tin Deck, Author và dữ liệu SM-2 của người học
-    final response = await _client
-        .from('user_decks')
-        .select('''
-          is_favorite,
-          last_studied_at,
-          decks!inner (
-            deck_id,
-            title,
-            parent_id,
-            public_status,
-            author:users!user_id (
-              username,
-              user_profiles (avatar_url)
-            ),
-            positions (
-              position_id,
-              users_positions (
-                user_id,
-                status,
-                next_review
+    try {
+      // Truy vấn bốc toàn bộ thông tin Deck, Author và dữ liệu SM-2 của người học
+      // 🌟 SỬA LỖI: Chỉ định rõ foreign key 'decks_user_id_fkey' để lấy tác giả (owner)
+      // vì giữa decks và users có nhiều hơn một mối quan hệ (FK trực tiếp và qua bảng trung gian).
+      final response = await _client
+          .from('user_decks')
+          .select('''
+            is_favorite,
+            last_studied_at,
+            decks (
+              deck_id,
+              title,
+              parent_id,
+              public_status,
+              author:users!decks_user_id_fkey (
+                username,
+                user_profiles (avatar_url)
+              ),
+              positions (
+                position_id,
+                users_positions (
+                  user_id,
+                  status,
+                  next_review
+                )
               )
             )
-          )
-        ''')
-        .eq('user_id', userId);
+          ''')
+          .eq('user_id', userId);
 
-    return List<Map<String, dynamic>>.from(response);
+      if (response == null) return [];
+      
+      // Chuyển đổi an toàn sang List<Map>
+      return (response as List).map((e) => Map<String, dynamic>.from(e)).toList();
+    } catch (e) {
+      print('❌ Repository Error in getUserDecks: $e');
+      rethrow;
+    }
   }
 
   Future<Map<String, dynamic>> getDeckStudyData(int deckId, int userId) async {
@@ -323,5 +333,97 @@ class DeckRepository {
 
   Future<void> deleteComment(int commentId) async {
     await _client.from('deck_comments').delete().eq('comment_id', commentId);
+  }
+
+  Future<List<Map<String, dynamic>>> getExploreDecks({
+    String? search,
+    String sortBy = 'trending',
+    required int page,
+    required int limit,
+  }) async {
+    final from = (page - 1) * limit;
+    final to = from + limit - 1;
+
+    // Bắt đầu query từ bảng decks (Sử dụng dynamic để tránh lỗi type mismatch của Supabase Builder)
+    dynamic query = _client.from('decks').select('''
+          deck_id,
+          title,
+          created_at,
+          author:users!user_id (
+            username,
+            user_profiles (avatar_url)
+          )
+        ''');
+
+    // Chỉ lấy deck công khai
+    query = query.eq('public_status', 'public');
+
+    // Áp dụng tìm kiếm nếu có (Bỏ description vì không tồn tại trong DB)
+    if (search != null && search.isNotEmpty) {
+      query = query.ilike('title', '%$search%');
+    }
+
+    // Áp dụng sắp xếp
+    if (sortBy == 'latest') {
+      query = query.order('created_at', ascending: false);
+    } else {
+      // Mặc định là trending: Vì không có view_count, ta tạm thời sắp xếp theo mới nhất 
+      // hoặc bạn có thể thêm tiêu chí khác sau này.
+      query = query.order('created_at', ascending: false);
+    }
+
+    // Phân trang
+    final response = await query.range(from, to);
+
+    // Tính toán số lượng người học hôm nay và tổng số người từng học cho từng deck
+    final List<Map<String, dynamic>> results = List<Map<String, dynamic>>.from(response);
+    
+    final today = DateTime.now().toIso8601String().substring(0, 10); // Lấy yyyy-MM-dd
+
+    for (var deck in results) {
+      final int deckId = deck['deck_id'];
+      
+      // 1. Tính active_learners_today (Số người học DUY NHẤT hôm nay)
+      final logsToday = await _client
+          .from('flashcard_study_logs')
+          .select('user_id')
+          .eq('deck_id', deckId)
+          .gte('studied_at', '$today 00:00:00')
+          .lte('studied_at', '$today 23:59:59');
+      
+      final Set<int> uniqueUsersToday = {};
+      for (var log in (logsToday as List)) {
+        uniqueUsersToday.add(log['user_id'] as int);
+      }
+      deck['active_learners_today'] = uniqueUsersToday.length;
+
+      // 2. Tính view_count (Số người học DUY NHẤT từ trước đến nay)
+      final logsAllTime = await _client
+          .from('flashcard_study_logs')
+          .select('user_id')
+          .eq('deck_id', deckId);
+
+      final Set<int> uniqueUsersAllTime = {};
+      for (var log in (logsAllTime as List)) {
+        uniqueUsersAllTime.add(log['user_id'] as int);
+      }
+      deck['view_count'] = uniqueUsersAllTime.length;
+    }
+
+    return results;
+  }
+
+  Future<void> saveDeckLink({
+    required int userId,
+    required int deckId,
+  }) async {
+    // Thực hiện chèn một dòng mới vào bảng user_decks
+    // Nếu cặp (user_id, deck_id) đã tồn tại, Supabase sẽ ném ra ngoại lệ Unique Constraint
+    await _client.from('user_decks').insert({
+      'user_id': userId,
+      'deck_id': deckId,
+      'is_favorite': false,
+      'last_studied_at': DateTime.now().toIso8601String(),
+    });
   }
 }

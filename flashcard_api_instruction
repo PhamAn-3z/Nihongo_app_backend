@@ -440,3 +440,52 @@ Hãy viết lại hoặc chỉnh sửa hàm Route API Handler xử lý import (v
 4. Bọc toàn bộ mã nguồn trong khối `try-catch` để xử lý ngoại lệ và đảm bảo trả về HTTP Response dạng JSON (`200 OK` nếu thành công, `500 Internal Server Error` kèm thông báo chi tiết nếu gặp sự cố).
 
 Hãy xuất ra đoạn mã xử lý Dart hoàn chỉnh, scannable, viết code sạch sẽ rõ ràng để tôi tích hợp ngay vào controller của mình.
+
+Phần XV: API Explore-Decks
+Tôi đang phát triển Backend cho ứng dụng Flashcard Ma trận bằng Dart (sử dụng thư viện `shelf` làm router và package `supabase` để kết nối Database). Tôi cần bạn viết một API Handler có tên là `getExploreDecksHandler(Request request)` để phục vụ cho màn hình "Khám phá bộ đề" (Explore Page) tương tự Quizlet.
+
+Yêu cầu logic xử lý của API như sau:
+
+1. Tiếp nhận Tham số Query (Query Parameters):
+   - API cần đọc các tham số truyền lên từ URL bao gồm:
+     + `search`: Từ khóa tìm kiếm (tìm theo `title` hoặc `description` của bộ đề). Default là trống.
+     + `sort_by`: Tiêu chí sắp xếp, gồm 'trending' (sắp xếp theo `view_count` hoặc `clone_count` giảm dần) và 'latest' (sắp xếp theo `created_at` giảm dần). Default là 'trending'.
+     + `page` và `limit`: Phục vụ phân trang (Pagination). Default `page = 1`, `limit = 10`.
+
+2. Câu lệnh truy vấn Supabase (Query Building):
+   - Chỉ lọc những bộ đề có trạng thái công khai: `public_status == 'public'`.
+   - Nếu có tham số `search`, áp dụng bộ lọc `.ilike()` hoặc `.or()` để tìm kiếm không phân biệt hoa thường trên hai cột `title` và `description`.
+   - Thực hiện logic phân trang bằng cách tính toán `.range(from, to)` dựa trên `page` và `limit`.
+
+3. Định dạng dữ liệu trả về (JSON Response):
+   - Phải trả về mã trạng thái HTTP 200 kèm cục JSON chứa:
+     + `success`: true
+     + `page`: Số trang hiện tại.
+     + `limit`: Số lượng bản ghi trên một trang.
+     + `data`: Danh sách các bộ đề thỏa mãn. Mỗi bộ đề cần có đủ thông tin: `deck_id`, `title`, `description`, `created_at`, `view_count`, và thông tin cơ bản của tác giả (thực hiện JOIN lấy `username`, `avatar_url` từ bảng `users` và `user_profiles`, `active_learners_today` (số người học hôm nay - Số lượng `user_id` DUY NHẤT có bản ghi trong bảng `flashcard_study_logs` thuộc `deck_id` này và có `studied_at` là ngày hôm nay).).
+   - Nếu xảy ra lỗi kết nối Database hoặc lỗi hệ thống, bắt ngoại lệ bằng `try-catch` và trả về HTTP 500 kèm thông báo lỗi.
+
+Hãy xuất ra đoạn mã nguồn Dart hoàn chỉnh, viết code sạch sẽ, chia rõ các bước xử lý và có chú thích tiếng Việt chi tiết để tôi tích hợp vào hệ thống Shelf Router của mình.
+
+Phần XVI:
+Tôi đang phát triển hệ thống Backend bằng Dart (sử dụng thư viện `shelf` làm router và package `supabase` để tương tác với Database).
+
+Tôi muốn làm một API có tên là `saveDeckLinkHandler(Request request)` để xử lý hành động khi người dùng bấm nút "Lưu thẻ" từ một bộ đề bên ngoài vào thư viện cá nhân ("My Decks"). Quy định nghiệp vụ của tôi như sau: Hệ thống KHÔNG thực hiện sao chép/clone dữ liệu ma trận, người lưu chỉ có quyền xem và học (Read-Only) trên dữ liệu gốc của tác giả, tuyệt đối không được chỉnh sửa cấu trúc bộ đề đó.
+
+Yêu cầu API thực hiện logic tối giản như sau:
+
+1. Tiếp nhận dữ liệu đầu vào:
+   - Đọc dữ liệu JSON từ body của request bao gồm: `user_id` (ID của người bấm lưu) và `deck_id` (ID của bộ đề gốc bên ngoài).
+
+2. Ghi nhận mối quan hệ liên kết (Table: user_decks):
+   - Thực hiện duy nhất một lệnh `INSERT` một dòng mới vào bảng `user_decks` với các trường dữ liệu:
+     + `user_id`: ID người lưu bài.
+     + `deck_id`: ID bộ đề gốc.
+     + `is_favorite`: false.
+     + `last_studied_at`: Thời gian hiện tại (`DateTime.now().toIso8601String()`).
+
+3. Phản hồi kết quả (Response):
+   - Nếu chèn dữ liệu thành công, trả về HTTP 200 kèm JSON: `{ "success": true, "message": "Đã lưu liên kết bộ đề vào thư viện thành công!" }`.
+   - Sử dụng khối `try-catch` để bắt các lỗi hệ thống hoặc lỗi ràng buộc trùng lặp dữ liệu (Unique Constraint của cặp user_id và deck_id nếu user bấm lưu 2 lần) để trả về HTTP 500 hoặc thông báo lỗi phù hợp.
+
+Hãy xuất ra đoạn mã nguồn Dart hoàn chỉnh, viết code sạch sẽ, tập trung duy nhất vào nhiệm vụ này và có chú thích bằng comment tiếng Việt.

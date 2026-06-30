@@ -51,56 +51,71 @@ class DeckService {
     final List<dynamic> rawData = await _deckRepository.getUserDecks(formattedUserId);
     
     // Bước 1: Làm phẳng và tính toán thông số Anki + Author cho từng Deck
-    List<Map<String, dynamic>> processedList = rawData.map((item) {
-      final deck = item['decks'] as Map<String, dynamic>;
+    List<Map<String, dynamic>> processedList = [];
+    
+    for (var item in rawData) {
+      final deck = item['decks'];
+      if (deck == null) continue;
+
       final authorData = deck['author'] as Map<String, dynamic>?;
       
-      // Lấy profile từ mảng lồng nhau
-      final profiles = authorData?['user_profiles'] as List?;
-      final authorProfile = (profiles != null && profiles.isNotEmpty) ? profiles[0] : null;
+      // Lấy profile từ mảng lồng nhau (Nâng cao null-safety)
+      final profiles = authorData?['user_profiles'];
+      final authorProfile = (profiles is List && profiles.isNotEmpty) ? profiles[0] : null;
       
-      final positions = deck['positions'] as List? ?? [];
+      final positions = deck['positions'];
+      final List<dynamic> positionsList = (positions is List) ? positions : [];
 
       // Tính toán thông số Anki
       int newCount = 0;
       int learningCount = 0;
       int dueCount = 0;
 
-      for (var pos in positions) {
-        final upList = pos['users_positions'] as List?;
-        // Lọc đúng bản ghi của người đang học (vì một position có thể có nhiều người học)
-        final up = (upList != null) 
-            ? upList.firstWhere((u) => u['user_id'] == formattedUserId, orElse: () => null)
-            : null;
+      for (var pos in positionsList) {
+        final upData = pos['users_positions'];
+        final List<dynamic> upList = (upData is List) ? upData : [];
+        
+        // Lọc đúng bản ghi của người đang học
+        Map<String, dynamic>? up;
+        try {
+          up = upList.firstWhere(
+            (u) => u['user_id'] == formattedUserId, 
+            orElse: () => null
+          );
+        } catch (_) {
+          up = null;
+        }
 
         if (up == null) {
-          // Theo yêu cầu: Nếu chưa có bản ghi thì thông số = 0. 
-          // Nếu bạn muốn tính là thẻ mới, hãy dùng: newCount++;
           continue;
         }
 
-        final String status = up['status'] ?? 'NEW';
-        final String? nextReviewStr = up['next_review'];
+        final String status = up['status']?.toString() ?? 'NEW';
+        final String? nextReviewStr = up['next_review']?.toString();
 
         if (status == 'NEW') {
           newCount++;
         } else if (status == 'LEARNING') {
           learningCount++;
         } else if (status == 'REVIEW') {
-          if (nextReviewStr != null) {
-            final nextReview = DateTime.parse(nextReviewStr);
-            if (nextReview.isBefore(now)) {
-              dueCount++;
+          if (nextReviewStr != null && nextReviewStr.isNotEmpty) {
+            try {
+              final nextReview = DateTime.parse(nextReviewStr);
+              if (nextReview.isBefore(now)) {
+                dueCount++;
+              }
+            } catch (e) {
+              print('⚠️ Error parsing date $nextReviewStr: $e');
             }
           }
         }
       }
 
-      return {
+      processedList.add({
         'deckId': deck['deck_id'],
-        'title': deck['title'],
+        'title': deck['title'] ?? 'Không tiêu đề',
         'parentId': deck['parent_id'],
-        'publicStatus': deck['public_status'],
+        'publicStatus': deck['public_status'] ?? 'private',
         'isFavorite': item['is_favorite'] ?? false,
         'lastStudiedAt': item['last_studied_at'],
         'author': {
@@ -113,20 +128,26 @@ class DeckService {
           'dueCount': dueCount,
         },
         'subDecks': <Map<String, dynamic>>[]
-      };
-    }).toList();
+      });
+    }
 
     // Bước 2: Dựng cây phân cấp (Tree Algorithm)
-    Map<int, Map<String, dynamic>> deckMap = {
-      for (var deck in processedList) deck['deckId']: deck
-    };
+    Map<int, Map<String, dynamic>> deckMap = {};
+    for (var deck in processedList) {
+      deckMap[deck['deckId']] = deck;
+    }
     
     List<Map<String, dynamic>> rootDecks = [];
 
     for (var deck in processedList) {
       final parentId = deck['parentId'];
       if (parentId != null && deckMap.containsKey(parentId)) {
-        deckMap[parentId]!['subDecks'].add(deck);
+        // Đảm bảo không tự lồng vào chính mình để tránh đệ quy vô tận
+        if (parentId != deck['deckId']) {
+          deckMap[parentId]!['subDecks'].add(deck);
+        } else {
+          rootDecks.add(deck);
+        }
       } else {
         rootDecks.add(deck);
       }
@@ -298,5 +319,50 @@ class DeckService {
 
     // Bước 4: Xóa
     await _deckRepository.deleteComment(commentId);
+  }
+
+  Future<List<Map<String, dynamic>>> getExploreDecks({
+    String? search,
+    String sortBy = 'trending',
+    int page = 1,
+    int limit = 10,
+  }) async {
+    final rawData = await _deckRepository.getExploreDecks(
+      search: search,
+      sortBy: sortBy,
+      page: page,
+      limit: limit,
+    );
+
+    // Chuyển đổi dữ liệu thô sang định dạng sạch hơn nếu cần
+    return rawData.map((deck) {
+      final authorData = deck['author'] as Map<String, dynamic>?;
+      final profiles = authorData?['user_profiles'] as List?;
+      final authorProfile = (profiles != null && profiles.isNotEmpty) ? profiles[0] : null;
+
+      return {
+        'deckId': deck['deck_id'],
+        'title': deck['title'],
+        'createdAt': deck['created_at'],
+        'viewCount': deck['view_count'] ?? 0,
+        'activeLearnersToday': deck['active_learners_today'] ?? 0,
+        'author': {
+          'username': authorData?['username'] ?? 'Ẩn danh',
+          'avatarUrl': authorProfile?['avatar_url'],
+        },
+      };
+    }).toList();
+  }
+
+  Future<void> saveDeckLink({
+    required dynamic userId,
+    required int deckId,
+  }) async {
+    final int formattedUserId = userId is String ? int.parse(userId) : userId as int;
+    
+    await _deckRepository.saveDeckLink(
+      userId: formattedUserId,
+      deckId: deckId,
+    );
   }
 }

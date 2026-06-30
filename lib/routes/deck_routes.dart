@@ -17,6 +17,12 @@ Router deckRoutes(DeckController controller) {
   // Lấy dữ liệu học tập của một bộ đề cụ thể
   router.get('/<id>/study', controller.getDeckStudyData);
 
+  // Khám phá bộ đề (Explore Page) - Đặt TRƯỚC các route có tham số <id> nếu cần, hoặc dùng path riêng
+  router.get('/explore', controller.getExploreDecks);
+
+  // Lưu liên kết bộ đề vào thư viện cá nhân (Phần XVI)
+  router.post('/save-link', controller.saveDeckLinkHandler);
+
   // Xóa bộ đề vĩnh viễn
   router.delete('/<id>', controller.deleteDeck);
 
