@@ -24,7 +24,7 @@ class ReceiptService {
     return await receiptRepository.getReceiptById(id);
   }
 
-  Future<Map<String, dynamic>> createReceipt(Map<String, dynamic> data) async {
+  Future<Map<String, dynamic>?> createReceipt(Map<String, dynamic> data) async {
     // 1. Validate basic required fields
     final requiredFields = ['user_id', 'membershipId', 'paymentMethod'];
     for (var field in requiredFields) {
@@ -65,11 +65,11 @@ class ReceiptService {
     return await receiptRepository.createReceipt(data);
   }
 
-  Future<Map<String, dynamic>> markAsPaid(int id) async {
+  Future<Map<String, dynamic>?> markAsPaid(int id) async {
     final updatedReceipt = await receiptRepository.updatePaymentStatus(id, true);
 
-    final userId = updatedReceipt['user_id'];
-    final membershipId = updatedReceipt['membershipId'];
+    final userId = updatedReceipt?['user_id'];
+    final membershipId = updatedReceipt?['membershipId'];
 
     if (userId != null && membershipId != null) {
       final membership = await membershipRepository.getMembershipById(int.parse(membershipId.toString()));
@@ -93,7 +93,7 @@ class ReceiptService {
     return updatedReceipt;
   }
 
-  Future<Map<String, dynamic>> update(int id, Map<String, dynamic> data) async {
+  Future<Map<String, dynamic>?> update(int id, Map<String, dynamic> data) async {
     data.remove('id');
     
     if (data.containsKey('total') && data['total'] < 0) {

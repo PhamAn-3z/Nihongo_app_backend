@@ -15,7 +15,7 @@ class VnPayController {
       final body = await request.readAsString();
       final data = jsonDecode(body);
 
-      Map<String, dynamic> receipt;
+      Map<String, dynamic>? receipt;
       
       // If receiptId is provided, use existing receipt. Otherwise, create a new one.
       if (data['receiptId'] != null) {
@@ -29,6 +29,8 @@ class VnPayController {
         // Create a new receipt
         receipt = await receiptService.createReceipt(data);
       }
+
+      if (receipt == null) throw Exception('Failed to create or find receipt');
 
       final receiptId = receipt['id'].toString();
       final double total = (receipt['total'] as num).toDouble();

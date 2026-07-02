@@ -14,26 +14,26 @@ class ReceiptRepository {
     return response;
   }
 
-  Future<Map<String, dynamic>> createReceipt(Map<String, dynamic> data) async {
-    return await supabase.from('Receipt').insert(data).select().single();
+  Future<Map<String, dynamic>?> createReceipt(Map<String, dynamic> data) async {
+    return await supabase.from('Receipt').insert(data).select().maybeSingle();
   }
 
-  Future<Map<String, dynamic>> updatePaymentStatus(int id, bool isPaid) async {
+  Future<Map<String, dynamic>?> updatePaymentStatus(int id, bool isPaid) async {
     return await supabase
         .from('Receipt')
         .update({'is_paid': isPaid})
         .eq('id', id)
         .select()
-        .single();
+        .maybeSingle();
   }
 
-  Future<Map<String, dynamic>> updateReceipt(int id, Map<String, dynamic> data) async {
+  Future<Map<String, dynamic>?> updateReceipt(int id, Map<String, dynamic> data) async {
     return await supabase
         .from('Receipt')
         .update(data)
         .eq('id', id)
         .select()
-        .single();
+        .maybeSingle();
   }
 
   Future<void> deleteExpiredUnpaidReceipts() async {
