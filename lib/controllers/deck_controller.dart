@@ -347,15 +347,21 @@ class DeckController {
 
   Future<Response> saveDeckLinkHandler(Request request) async {
     try {
+      // 🌟 Lấy userId trực tiếp từ Token để đảm bảo bảo mật
+      final payload = request.context['authPayload'] as Map<String, dynamic>?;
+      if (payload == null || payload['userId'] == null) {
+        return Response.forbidden(jsonEncode({'message': 'Unauthorized'}));
+      }
+
+      final dynamic userId = payload['userId'];
       final body = jsonDecode(await request.readAsString());
       
-      // Đọc user_id và deck_id từ body theo yêu cầu phần XVI
-      final dynamic userId = body['user_id'];
+      // Bây giờ Body chỉ cần gửi duy nhất deck_id
       final dynamic deckIdValue = body['deck_id'];
 
-      if (userId == null || deckIdValue == null) {
+      if (deckIdValue == null) {
         return Response.badRequest(
-          body: jsonEncode({'success': false, 'message': 'Thiếu tham số user_id hoặc deck_id!'}),
+          body: jsonEncode({'success': false, 'message': 'Thiếu tham số deck_id!'}),
           headers: {'content-type': 'application/json'},
         );
       }
@@ -375,7 +381,7 @@ class DeckController {
         headers: {'content-type': 'application/json'},
       );
     } catch (e) {
-      // Xử lý lỗi trùng lặp (Unique Constraint) hoặc lỗi hệ thống khác
+      // Xử lý lỗi trùng lặp (Unique Constraint)
       String message = "Lỗi hệ thống khi lưu bộ đề.";
       if (e.toString().contains('duplicate key')) {
         message = "Bạn đã lưu bộ đề này vào thư viện rồi!";
