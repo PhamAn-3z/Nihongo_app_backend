@@ -334,11 +334,17 @@ class DeckService {
       limit: limit,
     );
 
-    // Chuyển đổi dữ liệu thô sang định dạng sạch hơn nếu cần
+    // Chuyển đổi dữ liệu thô sang định dạng sạch hơn (Xử lý linh hoạt Map/List cho profiles)
     return rawData.map((deck) {
       final authorData = deck['author'] as Map<String, dynamic>?;
-      final profiles = authorData?['user_profiles'] as List?;
-      final authorProfile = (profiles != null && profiles.isNotEmpty) ? profiles[0] : null;
+      final profiles = authorData?['user_profiles'];
+      
+      Map<String, dynamic>? authorProfile;
+      if (profiles is List && profiles.isNotEmpty) {
+        authorProfile = profiles[0] as Map<String, dynamic>;
+      } else if (profiles is Map) {
+        authorProfile = Map<String, dynamic>.from(profiles);
+      }
 
       return {
         'deckId': deck['deck_id'],

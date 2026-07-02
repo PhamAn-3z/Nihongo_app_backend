@@ -349,7 +349,7 @@ class DeckRepository {
           deck_id,
           title,
           created_at,
-          author:users!user_id (
+          author:users!decks_user_id_fkey (
             username,
             user_profiles (avatar_url)
           )
