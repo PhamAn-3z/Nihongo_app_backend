@@ -171,4 +171,55 @@ void main() async {
   final server = await shelf_io.serve(handler, InternetAddress.anyIPv4, port);
 
   print(' SERVER ĐANG CHẠY TẠI: http://${server.address.host}:${server.port}');
+  
+  // Khởi động SSH Tunnel tự động
+  _startSshTunnel(port);
+}
+
+void _startSshTunnel(int port) async {
+  try {
+    print('🔑 Đang khởi tạo SSH Tunnel qua localhost.run...');
+    final process = await Process.start(
+      'ssh',
+      ['-o', 'StrictHostKeyChecking=no', '-R', '80:127.0.0.1:$port', 'nokey@localhost.run'],
+      runInShell: true,
+    );
+
+    // Lắng nghe stdout để lấy URL tunnel
+    process.stdout.transform(utf8.decoder).transform(const LineSplitter()).listen((line) {
+      if (line.contains('.lhr.life')) {
+        final regExp = RegExp(r'https://[a-zA-Z0-9\.]+');
+        final match = regExp.firstMatch(line);
+        if (match != null) {
+          final tunnelUrl = match.group(0)!;
+          VnPayController.activeTunnelUrl = tunnelUrl;
+          print('\n⚡ SSH TUNNEL ĐANG HOẠT ĐỘNG TẠI: $tunnelUrl ⚡\n');
+        } else {
+          print('🔗 Tunnel: $line');
+        }
+      }
+    });
+
+    // Lắng nghe stderr
+    process.stderr.transform(utf8.decoder).transform(const LineSplitter()).listen((line) {
+      if (line.toLowerCase().contains('error') || line.toLowerCase().contains('fail')) {
+        print('⚠️ SSH Tunnel Warning: $line');
+      }
+    });
+
+    // Đảm bảo kill SSH process khi server dừng (Ctrl+C)
+    ProcessSignal.sigint.watch().listen((_) {
+      process.kill();
+      exit(0);
+    });
+    if (!Platform.isWindows) {
+      ProcessSignal.sigterm.watch().listen((_) {
+        process.kill();
+        exit(0);
+      });
+    }
+
+  } catch (e) {
+    print('❌ Không thể khởi động SSH Tunnel: $e');
+  }
 }

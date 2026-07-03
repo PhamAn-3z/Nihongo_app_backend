@@ -8,6 +8,8 @@ class VnPayController {
   final VnPayService vnpayService;
   final ReceiptService receiptService;
 
+  static String? activeTunnelUrl;
+
   VnPayController(this.vnpayService, this.receiptService);
 
   Future<Response> createPayment(Request request) async {
@@ -71,7 +73,9 @@ class VnPayController {
       }
 
       final portSuffix = (scheme == 'http' && port == 80) || (scheme == 'https' && port == 443) ? '' : ':$port';
-      final defaultReturnUrl = '$scheme://$host$portSuffix/api/v1/vnpay/return';
+      final defaultReturnUrl = (VnPayController.activeTunnelUrl != null)
+          ? '${VnPayController.activeTunnelUrl}/api/v1/vnpay/return'
+          : '$scheme://$host$portSuffix/api/v1/vnpay/return';
       final returnUrl = data['returnUrl'] ?? defaultReturnUrl;
       
       final paymentUrl = vnpayService.createPaymentUrl(
