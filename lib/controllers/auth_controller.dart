@@ -30,8 +30,9 @@ class AuthController {
       );
 
       if (token == null) {
-        return Response.forbidden(
-          jsonEncode({
+        return Response(
+          401, // Unauthorized: Sai email hoặc mật khẩu
+          body: jsonEncode({
             'message': 'Invalid email or password',
           }),
           headers: {'Content-Type': 'application/json'},
@@ -47,10 +48,12 @@ class AuthController {
         },
       );
     } catch (e) {
+      final errorMsg = e.toString().replaceAll('Exception: ', '');
+      
       return Response(
-        e.toString().contains('verify your email') ? 403 : 500,
+        errorMsg.contains('verify your email') ? 403 : 500, // 403 nếu chưa xác thực, 500 cho các lỗi server khác
         body: jsonEncode({
-          'message': e.toString().replaceAll('Exception: ', ''),
+          'message': errorMsg,
         }),
         headers: {'Content-Type': 'application/json'},
       );
