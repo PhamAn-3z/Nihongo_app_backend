@@ -42,8 +42,37 @@ class VnPayController {
         ipAddr = connectionInfo.remoteAddress.address;
       }
 
-      // 3. Generate VNPay URL
-      final returnUrl = data['returnUrl'] ?? 'http://localhost:8080/api/v1/vnpay/return';
+      // 3. Generate VNPay URL (dynamically resolve host/proto from request/proxy headers)
+      String scheme = request.requestedUri.scheme;
+      String host = request.requestedUri.host;
+      int port = request.requestedUri.port;
+
+      if (request.headers.containsKey('x-forwarded-proto')) {
+        scheme = request.headers['x-forwarded-proto']!;
+      }
+      if (request.headers.containsKey('x-forwarded-host')) {
+        final fwdHost = request.headers['x-forwarded-host']!;
+        final parts = fwdHost.split(':');
+        host = parts[0];
+        if (parts.length > 1) {
+          port = int.tryParse(parts[1]) ?? (scheme == 'https' ? 443 : 80);
+        } else {
+          port = scheme == 'https' ? 443 : 80;
+        }
+      } else if (request.headers.containsKey('host')) {
+        final hostHeader = request.headers['host']!;
+        final parts = hostHeader.split(':');
+        host = parts[0];
+        if (parts.length > 1) {
+          port = int.tryParse(parts[1]) ?? (scheme == 'https' ? 443 : 80);
+        } else {
+          port = scheme == 'https' ? 443 : 80;
+        }
+      }
+
+      final portSuffix = (scheme == 'http' && port == 80) || (scheme == 'https' && port == 443) ? '' : ':$port';
+      final defaultReturnUrl = '$scheme://$host$portSuffix/api/v1/vnpay/return';
+      final returnUrl = data['returnUrl'] ?? defaultReturnUrl;
       
       final paymentUrl = vnpayService.createPaymentUrl(
         amount: total, // Using the receipt total
