@@ -9,7 +9,7 @@ class NotificationService {
     return await notificationRepository.getByUserId(userId);
   }
 
-  Future<Map<String, dynamic>> createNotification(Map<String, dynamic> data) async {
+  Future<Map<String, dynamic>?> createNotification(Map<String, dynamic> data) async {
     // Validate required fields
     if (data['user_id'] == null) {
       throw ArgumentError('user_id is required');
@@ -46,7 +46,7 @@ class NotificationService {
     return await notificationRepository.createNotification(data);
   }
 
-  Future<Map<String, dynamic>> markAsRead(int notificationId) async {
+  Future<Map<String, dynamic>?> markAsRead(int notificationId) async {
     return await notificationRepository.markAsRead(notificationId);
   }
 

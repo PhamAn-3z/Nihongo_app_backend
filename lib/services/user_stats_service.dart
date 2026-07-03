@@ -9,14 +9,14 @@ class UserStatsService {
     return await userStatsRepository.getUserStats(userId);
   }
 
-  Future<Map<String, dynamic>> updateStats(int userId, Map<String, dynamic> updates) async {
+  Future<Map<String, dynamic>?> updateStats(int userId, Map<String, dynamic> updates) async {
     // Prevent updating user_id
     updates.remove('user_id');
     
     return await userStatsRepository.updateStats(userId, updates);
   }
 
-  Future<Map<String, dynamic>> initializeStats(int userId) async {
+  Future<Map<String, dynamic>?> initializeStats(int userId) async {
     return await userStatsRepository.createUserStats({
       'user_id': userId,
       'current_streak': 0,

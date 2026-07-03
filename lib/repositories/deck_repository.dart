@@ -20,7 +20,11 @@ class DeckRepository {
         'title': title,
         'public_status': publicStatus,
         'parent_id': parentId,
-      }).select().single();
+      }).select().maybeSingle();
+
+      if (deckResponse == null) {
+        throw Exception('Failed to create deck');
+      }
 
       final int deckId = deckResponse['deck_id'];
 
@@ -180,7 +184,11 @@ class DeckRepository {
         .eq('users_positions.user_id', userId);
 
     // Lấy thông tin cơ bản của Deck
-    final deckInfo = await _client.from('decks').select('title').eq('deck_id', deckId).single();
+    final deckInfo = await _client.from('decks').select('title').eq('deck_id', deckId).maybeSingle();
+
+    if (deckInfo == null) {
+      throw Exception('Deck not found');
+    }
 
     return {
       'deckId': deckId,
@@ -269,7 +277,11 @@ class DeckRepository {
       'user_id': userId,
       'parent_comment_id': parentCommentId,
       'content': content.trim(),
-    }).select().single();
+    }).select().maybeSingle();
+
+    if (response == null) {
+      throw Exception('Failed to add comment');
+    }
 
     return response;
   }

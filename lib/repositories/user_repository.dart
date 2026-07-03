@@ -10,10 +10,9 @@ class UserRepository {
     final response = await supabase
         .from('users')
         .select()
-        .eq('email', email)
-        .maybeSingle();
+        .eq('email', email);
 
-    return response;
+    return (response as List).isEmpty ? null : response.first;
   }
 
   // Tìm user theo user_id
@@ -21,19 +20,17 @@ class UserRepository {
     final response = await supabase
         .from('users')
         .select()
-        .eq('user_id', userId)
-        .maybeSingle();
+        .eq('user_id', userId);
 
-    return response;
+    return (response as List).isEmpty ? null : response.first;
   }
 
   // Tạo user mới
-  Future<Map<String, dynamic>> createUser(Map<String, dynamic> user) async {
+  Future<Map<String, dynamic>?> createUser(Map<String, dynamic> user) async {
     final response = await supabase
         .from('users')
         .insert(user)
-        .select()
-        .single();
-    return response;
+        .select();
+    return (response as List).isEmpty ? null : response.first;
   }
 }

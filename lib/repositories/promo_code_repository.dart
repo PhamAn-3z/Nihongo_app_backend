@@ -23,16 +23,16 @@ class PromoCodeRepository {
     return await supabase.from('PromoCode').select().eq('id', id).maybeSingle();
   }
 
-  Future<Map<String, dynamic>> createPromoCode(Map<String, dynamic> data) async {
-    return await supabase.from('PromoCode').insert(data).select().single();
+  Future<Map<String, dynamic>?> createPromoCode(Map<String, dynamic> data) async {
+    return await supabase.from('PromoCode').insert(data).select().maybeSingle();
   }
 
-  Future<Map<String, dynamic>> updatePromoCode(int id, Map<String, dynamic> data) async {
+  Future<Map<String, dynamic>?> updatePromoCode(int id, Map<String, dynamic> data) async {
     return await supabase
         .from('PromoCode')
         .update(data)
         .eq('id', id)
         .select()
-        .single();
+        .maybeSingle();
   }
 }

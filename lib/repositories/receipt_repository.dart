@@ -10,30 +10,31 @@ class ReceiptRepository {
   }
 
   Future<Map<String, dynamic>?> getReceiptById(int id) async {
-    final response = await supabase.from('Receipt').select().eq('id', id).maybeSingle();
-    return response;
+    final response = await supabase.from('Receipt').select().eq('id', id);
+    return (response as List).isEmpty ? null : response.first;
   }
 
   Future<Map<String, dynamic>?> createReceipt(Map<String, dynamic> data) async {
-    return await supabase.from('Receipt').insert(data).select().maybeSingle();
+    final response = await supabase.from('Receipt').insert(data).select();
+    return (response as List).isEmpty ? null : response.first;
   }
 
   Future<Map<String, dynamic>?> updatePaymentStatus(int id, bool isPaid) async {
-    return await supabase
+    final response = await supabase
         .from('Receipt')
         .update({'is_paid': isPaid})
         .eq('id', id)
-        .select()
-        .maybeSingle();
+        .select();
+    return (response as List).isEmpty ? null : response.first;
   }
 
   Future<Map<String, dynamic>?> updateReceipt(int id, Map<String, dynamic> data) async {
-    return await supabase
+    final response = await supabase
         .from('Receipt')
         .update(data)
         .eq('id', id)
-        .select()
-        .maybeSingle();
+        .select();
+    return (response as List).isEmpty ? null : response.first;
   }
 
   Future<void> deleteExpiredUnpaidReceipts() async {

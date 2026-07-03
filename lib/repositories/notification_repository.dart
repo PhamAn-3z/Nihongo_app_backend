@@ -16,23 +16,23 @@ class NotificationRepository {
   }
 
   // Create a new notification
-  Future<Map<String, dynamic>> createNotification(Map<String, dynamic> data) async {
+  Future<Map<String, dynamic>?> createNotification(Map<String, dynamic> data) async {
     final response = await supabase
         .from('notifications')
         .insert(data)
         .select()
-        .single();
+        .maybeSingle();
     return response;
   }
 
   // Mark a notification as read (is_read = 1)
-  Future<Map<String, dynamic>> markAsRead(int notificationId) async {
+  Future<Map<String, dynamic>?> markAsRead(int notificationId) async {
     final response = await supabase
         .from('notifications')
         .update({'is_read': 1})
         .eq('id', notificationId)
         .select()
-        .single();
+        .maybeSingle();
     return response;
   }
 

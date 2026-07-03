@@ -13,7 +13,7 @@ class MembershipService {
     return await membershipRepository.getMembershipById(id);
   }
 
-  Future<Map<String, dynamic>> createMembership(Map<String, dynamic> data) async {
+  Future<Map<String, dynamic>?> createMembership(Map<String, dynamic> data) async {
     // Validate required fields from Transaction.txt
     final requiredFields = ['Duration', 'membershipRank', 'price', 'maxFlashcardSet'];
     
@@ -42,7 +42,7 @@ class MembershipService {
     return await membershipRepository.createMembership(data);
   }
 
-  Future<Map<String, dynamic>> update(int id, Map<String, dynamic> data) async {
+  Future<Map<String, dynamic>?> update(int id, Map<String, dynamic> data) async {
     // Prevent updating the ID
     data.remove('id');
 
@@ -60,7 +60,7 @@ class MembershipService {
     return await membershipRepository.updateMembership(id, data);
   }
 
-  Future<Map<String, dynamic>> toggleActiveStatus(int id) async {
+  Future<Map<String, dynamic>?> toggleActiveStatus(int id) async {
     final membership = await membershipRepository.getMembershipById(id);
     if (membership == null) {
       throw Exception('Membership not found');

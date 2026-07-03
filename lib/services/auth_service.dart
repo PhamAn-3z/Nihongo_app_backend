@@ -31,7 +31,7 @@ class AuthService {
       'created_at': DateTime.now().toIso8601String(),
     });
 
-    final userId = newUser['user_id'];
+    final userId = newUser?['user_id'];
     if (userId != null) {
       await userStatsRepository.createUserStats({
         'user_id': int.parse(userId.toString()),

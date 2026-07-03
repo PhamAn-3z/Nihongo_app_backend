@@ -17,7 +17,7 @@ class PromoCodeService {
     return await promoCodeRepository.getAllPromoCodes();
   }
 
-  Future<Map<String, dynamic>> createPromoCode(Map<String, dynamic> data) async {
+  Future<Map<String, dynamic>?> createPromoCode(Map<String, dynamic> data) async {
     // Validate required fields from Transaction.txt
     final requiredFields = ['sales', 'dayExpired'];
     
@@ -30,12 +30,12 @@ class PromoCodeService {
     return await promoCodeRepository.createPromoCode(data);
   }
 
-  Future<Map<String, dynamic>> update(int id, Map<String, dynamic> data) async {
+  Future<Map<String, dynamic>?> update(int id, Map<String, dynamic> data) async {
     data.remove('id');
     return await promoCodeRepository.updatePromoCode(id, data);
   }
 
-  Future<Map<String, dynamic>> toggleExpiredStatus(int id) async {
+  Future<Map<String, dynamic>?> toggleExpiredStatus(int id) async {
     final promo = await promoCodeRepository.getPromoCodeById(id);
     if (promo == null) {
       throw Exception('Promo code not found');
