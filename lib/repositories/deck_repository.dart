@@ -133,6 +133,7 @@ class DeckRepository {
 
   Future<List<Map<String, dynamic>>> getUserDecks(int userId) async {
     // Truy vấn bốc toàn bộ thông tin Deck, Author và dữ liệu SM-2 của người học
+    // 🌟 SỬA LỖI PGRST201: Chỉ định rõ khóa ngoại 'decks_user_id_fkey' để lấy tác giả
     final response = await _client
         .from('user_decks')
         .select('''
@@ -143,7 +144,7 @@ class DeckRepository {
             title,
             parent_id,
             public_status,
-            author:users (
+            author:users!decks_user_id_fkey (
               username,
               user_profiles (avatar_url)
             ),

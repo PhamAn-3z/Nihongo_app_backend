@@ -41,11 +41,17 @@ class DeckService {
       final deck = item['decks'] as Map<String, dynamic>;
       final authorData = deck['author'] as Map<String, dynamic>?;
       
-      // Lấy profile từ mảng lồng nhau
-      final profiles = authorData?['user_profiles'] as List?;
-      final authorProfile = (profiles != null && profiles.isNotEmpty) ? profiles[0] : null;
+      // Lấy profile - Xử lý linh hoạt cả List và Map
+      final profilesRaw = authorData?['user_profiles'];
+      Map<String, dynamic>? authorProfile;
+      if (profilesRaw is List && profilesRaw.isNotEmpty) {
+        authorProfile = profilesRaw[0] as Map<String, dynamic>;
+      } else if (profilesRaw is Map) {
+        authorProfile = Map<String, dynamic>.from(profilesRaw);
+      }
       
-      final positions = deck['positions'] as List? ?? [];
+      final positionsRaw = deck['positions'];
+      final List<dynamic> positions = (positionsRaw is List) ? positionsRaw : [];
 
       // Tính toán thông số Anki
       int newCount = 0;
@@ -53,15 +59,21 @@ class DeckService {
       int dueCount = 0;
 
       for (var pos in positions) {
-        final upList = pos['users_positions'] as List?;
-        // Lọc đúng bản ghi của người đang học (vì một position có thể có nhiều người học)
-        final up = (upList != null) 
-            ? upList.firstWhere((u) => u['user_id'] == formattedUserId, orElse: () => null)
-            : null;
+        final upRaw = pos['users_positions'];
+        List<dynamic> upList = [];
+        if (upRaw is List) {
+          upList = upRaw;
+        } else if (upRaw is Map) {
+          upList = [upRaw];
+        }
+
+        // Lọc đúng bản ghi của người đang học
+        final up = upList.firstWhere(
+          (u) => u['user_id'] == formattedUserId, 
+          orElse: () => null
+        );
 
         if (up == null) {
-          // Theo yêu cầu: Nếu chưa có bản ghi thì thông số = 0. 
-          // Nếu bạn muốn tính là thẻ mới, hãy dùng: newCount++;
           continue;
         }
 
