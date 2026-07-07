@@ -138,12 +138,12 @@ class DeckRepository {
         .select('''
           is_favorite,
           last_studied_at,
-          decks!inner (
+          decks (
             deck_id,
             title,
             parent_id,
             public_status,
-            author:users!user_id (
+            author:users (
               username,
               user_profiles (avatar_url)
             ),
@@ -159,7 +159,7 @@ class DeckRepository {
         ''')
         .eq('user_id', userId);
 
-    return List<Map<String, dynamic>>.from(response);
+    return List<Map<String, dynamic>>.from(response as List);
   }
 
   Future<Map<String, dynamic>> getDeckStudyData(int deckId, int userId) async {

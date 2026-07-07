@@ -170,20 +170,26 @@ void main() async {
   final port = int.parse(Platform.environment['PORT'] ?? '8080');
   final server = await shelf_io.serve(handler, InternetAddress.anyIPv4, port);
 
-  print(' SERVER ĐANG CHẠY TẠI: http://${server.address.host}:${server.port}');
+  print('🚀 SERVER ĐANG CHẠY TẠI: http://${server.address.host}:${server.port}');
+  print('💡 Mẹo: Bạn có thể dùng địa chỉ IP máy tính để test nội bộ (ví dụ: http://192.168.1.x:8080)');
   
-  // Khởi động SSH Tunnel tự động
+  // Khởi động SSH Tunnel tự động (Không bắt buộc, không chặn luồng chính)
   _startSshTunnel(port);
 }
 
 void _startSshTunnel(int port) async {
   try {
-    print('🔑 Đang khởi tạo SSH Tunnel qua localhost.run...');
+    print('🔑 Đang khởi tạo SSH Tunnel qua localhost.run (Vui lòng đợi giây lát)...');
+    
+    // Sử dụng -n để tránh treo do đợi input, và thêm -T để tắt pty
     final process = await Process.start(
       'ssh',
-      ['-o', 'StrictHostKeyChecking=no', '-R', '80:127.0.0.1:$port', 'nokey@localhost.run'],
+      ['-n', '-T', '-o', 'StrictHostKeyChecking=no', '-R', '80:127.0.0.1:$port', 'nokey@localhost.run'],
       runInShell: true,
     );
+
+    // Biến để theo dõi xem đã lấy được URL chưa
+    bool tunnelStarted = false;
 
     // Lắng nghe stdout để lấy URL tunnel
     process.stdout.transform(utf8.decoder).transform(const LineSplitter()).listen((line) {
@@ -193,17 +199,29 @@ void _startSshTunnel(int port) async {
         if (match != null) {
           final tunnelUrl = match.group(0)!;
           VnPayController.activeTunnelUrl = tunnelUrl;
-          print('\n⚡ SSH TUNNEL ĐANG HOẠT ĐỘNG TẠI: $tunnelUrl ⚡\n');
-        } else {
-          print('🔗 Tunnel: $line');
+          tunnelStarted = true;
+          print('\n🌍 SSH TUNNEL ĐANG HOẠT ĐỘNG TẠI: $tunnelUrl');
+          print('✅ Bạn có thể dùng link này để test VNPay từ xa.\n');
         }
+      }
+      // Log các dòng khác từ localhost.run nếu cần debug
+      if (!tunnelStarted && line.isNotEmpty) {
+        // print('DEBUG SSH: $line');
       }
     });
 
     // Lắng nghe stderr
     process.stderr.transform(utf8.decoder).transform(const LineSplitter()).listen((line) {
-      if (line.toLowerCase().contains('error') || line.toLowerCase().contains('fail')) {
-        print('⚠️ SSH Tunnel Warning: $line');
+      if (line.toLowerCase().contains('permission denied') || line.toLowerCase().contains('failed')) {
+        print('⚠️  SSH Tunnel Error: $line');
+      }
+    });
+
+    // Kiểm tra nếu sau 15 giây vẫn chưa có tunnel thì thông báo cho người dùng
+    Future.delayed(const Duration(seconds: 15), () {
+      if (!tunnelStarted) {
+        print('⏳ Việc tạo Tunnel đang mất nhiều thời gian hơn dự kiến.');
+        print('👉 Bạn vẫn có thể test bằng IP nội bộ hoặc kiểm tra lại kết nối mạng/SSH.');
       }
     });
 
@@ -212,14 +230,8 @@ void _startSshTunnel(int port) async {
       process.kill();
       exit(0);
     });
-    if (!Platform.isWindows) {
-      ProcessSignal.sigterm.watch().listen((_) {
-        process.kill();
-        exit(0);
-      });
-    }
-
   } catch (e) {
-    print('❌ Không thể khởi động SSH Tunnel: $e');
+    print('❌ Không thể khởi động lệnh SSH: $e');
+    print('📌 Hãy đảm bảo bạn đã cài đặt OpenSSH (gõ "ssh" trong cmd để kiểm tra).');
   }
 }
