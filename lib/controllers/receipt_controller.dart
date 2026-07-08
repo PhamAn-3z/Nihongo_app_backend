@@ -18,6 +18,31 @@ class ReceiptController {
     }
   }
 
+  Future<Response> getMyReceipts(Request request) async {
+    try {
+      final payload = request.context['authPayload'] as Map<String, dynamic>?;
+      if (payload == null) {
+        return Response.forbidden(jsonEncode({'status': 'error', 'message': 'Unauthorized'}));
+      }
+
+      final userId = int.tryParse(payload['userId']?.toString() ?? '');
+      if (userId == null) {
+        return Response.badRequest(body: jsonEncode({'status': 'error', 'message': 'Invalid User ID in token'}));
+      }
+
+      final receipts = await receiptService.getByUserId(userId);
+      return Response.ok(
+        jsonEncode({'status': 'success', 'data': receipts}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e) {
+      return Response.internalServerError(
+        body: jsonEncode({'status': 'error', 'message': e.toString()}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+  }
+
   Future<Response> create(Request request) async {
     try {
       final data = jsonDecode(await request.readAsString());

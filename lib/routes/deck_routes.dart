@@ -7,6 +7,9 @@ Router deckRoutes(DeckController controller) {
 
   // API Bulk Import
   router.post('/bulk-import', controller.bulkImportCreateDeck);
+
+  // Kiểm tra giới hạn tạo bộ đề
+  router.get('/membership-limit', controller.getMembershipLimit);
   
   // Lấy danh sách bộ đề
   router.get('/', controller.getAllDecks);

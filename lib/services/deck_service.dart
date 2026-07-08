@@ -1,9 +1,30 @@
+import 'package:flashcard_quiz_backend/repositories/user_stats_repository.dart';
+
 import '../repositories/deck_repository.dart';
 
 class DeckService {
   final DeckRepository _deckRepository;
+  final UserStatsRepository _userStatsRepository;
 
-  DeckService(this._deckRepository);
+  DeckService(this._deckRepository, this._userStatsRepository);
+
+  /// Kiểm tra giới hạn số lượng bộ đề dựa trên gói Membership
+  Future<void> _checkMembershipLimit(int userId) async {
+    final userStats = await _userStatsRepository.getUserStatsWithMembership(userId);
+    
+    if (userStats != null && userStats['Membership'] != null) {
+      final membership = userStats['Membership'];
+      final int maxDecks = int.tryParse(membership['maxFlashcardSet']?.toString() ?? '') ?? 0;
+      
+      // Nếu maxDecks > 0, thực hiện kiểm tra số lượng hiện tại
+      if (maxDecks > 0) {
+        final int currentDecks = await _deckRepository.countUserCreatedDecks(userId);
+        if (currentDecks >= maxDecks) {
+          throw Exception('Bạn đã đạt giới hạn tối đa ($maxDecks bộ đề) của gói thành viên hiện tại. Vui lòng nâng cấp để tạo thêm!');
+        }
+      }
+    }
+  }
 
   Future<Map<String, dynamic>> bulkImportCreateDeck({
     required dynamic userId,
@@ -16,6 +37,10 @@ class DeckService {
     // Ép kiểu userId về int nếu nó là String (do JWT payload thường là String)
     final int formattedUserId = userId is String ? int.parse(userId) : userId as int;
 
+    // 1. Kiểm tra giới hạn Membership trước khi tạo
+    await _checkMembershipLimit(formattedUserId);
+
+    // 2. Thực hiện tạo bộ đề
     return await _deckRepository.bulkImportCreateDeck(
       userId: formattedUserId,
       title: title,
@@ -24,6 +49,36 @@ class DeckService {
       headers: headers,
       rows: rows,
     );
+  }
+
+  /// Lấy thông tin giới hạn và số lượng bộ đề hiện tại của user
+  Future<Map<String, dynamic>> getUserMembershipLimit(dynamic userId) async {
+    final int formattedUserId = userId is String ? int.parse(userId) : userId as int;
+    
+    final userStats = await _userStatsRepository.getUserStatsWithMembership(formattedUserId);
+    final int currentDecks = await _deckRepository.countUserCreatedDecks(formattedUserId);
+    
+    int maxDecks = 0;
+    String membershipName = 'N/A';
+    
+    if (userStats != null && userStats['Membership'] != null) {
+      final membership = userStats['Membership'];
+      maxDecks = int.tryParse(membership['maxFlashcardSet']?.toString() ?? '') ?? 0;
+      membershipName = membership['membershipRank'] ?? 'Free';
+    }
+
+    return {
+      'membershipName': membershipName,
+      'currentDecks': currentDecks,
+      'maxDecks': maxDecks,
+      'canCreateMore': maxDecks == 0 || currentDecks < maxDecks,
+    };
+  }
+
+  /// Đếm số lượng bộ đề của một người dùng (Dùng cho logic nội bộ)
+  Future<int> countUserDecks(dynamic userId) async {
+    final int formattedUserId = userId is String ? int.parse(userId) : userId as int;
+    return await _deckRepository.countUserCreatedDecks(formattedUserId);
   }
 
   Future<List<dynamic>> getAllDecks() async {

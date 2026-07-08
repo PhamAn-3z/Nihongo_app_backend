@@ -23,4 +23,13 @@ class UserStatsRepository {
         .select();
     return (response as List).isEmpty ? null : response.first;
   }
+
+  Future<Map<String, dynamic>?> getUserStatsWithMembership(int userId) async {
+    final response = await supabase
+        .from('user_stats')
+        .select('*, Membership(*)')
+        .eq('user_id', userId);
+
+    return (response as List).isEmpty ? null : response.first;
+  }
 }

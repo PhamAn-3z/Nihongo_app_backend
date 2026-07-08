@@ -94,7 +94,7 @@ void main() async {
   
   // Deck Layer
   final deckRepository = DeckRepository(supabaseClient);
-  final deckService = DeckService(deckRepository);
+  final deckService = DeckService(deckRepository, userStatsRepository);
 
   // Controllers
   final authController = AuthController(authService);
@@ -149,20 +149,29 @@ void main() async {
       .addMiddleware(logRequests())
       .addMiddleware(corsMiddleware()) // <-- thêm lại CORS
       .addMiddleware((Handler innerHandler) {
-    return (Request request) {
-      if (request.url.path.startsWith('api/v1/profile') ||
-          request.url.path.startsWith('api/v1/stats') ||
-          request.url.path.startsWith('api/v1/receipts')||
-          request.url.path.contains('api/v1/decks') ||
-          request.url.path.contains('api/v1/comments') ||
-          request.url.path.contains('api/v1/user') ||
-          request.url.path.contains('api/v1/notifications') ||
-          request.url.path.endsWith('auth/logout')) {
-        return authMiddleware()(innerHandler)(request);
-      }
+      return (Request request) {
+        final path = request.url.path;
 
-      return innerHandler(request);
-    };
+        // Các path yêu cầu xác thực
+        bool needsAuth = path.startsWith('api/v1/profile') ||
+            path.startsWith('api/v1/stats') ||
+            path.startsWith('api/v1/receipts') ||
+            path.contains('api/v1/comments') ||
+            path.contains('api/v1/user') ||
+            path.contains('api/v1/notifications') ||
+            path.endsWith('auth/logout');
+
+        // Riêng với /decks, ta yêu cầu auth trừ các endpoint công khai
+        if (path.contains('api/v1/decks')) {
+          needsAuth = true;
+        }
+
+        if (needsAuth) {
+          return authMiddleware()(innerHandler)(request);
+        }
+
+        return innerHandler(request);
+      };
   })
       .addHandler(router);
 
