@@ -73,7 +73,10 @@ class DeckService {
           orElse: () => null
         );
 
+        // 🌟 SỬA LỖI: Nếu người dùng chưa bao giờ học thẻ này (chưa có record users_positions)
+        // thì mặc định coi đây là thẻ MỚI (newCount).
         if (up == null) {
+          newCount++;
           continue;
         }
 
@@ -185,23 +188,42 @@ class DeckService {
       };
     }).toList();
 
-    // Sắp xếp flashcards theo thuật toán Anki (Review -> Learning -> New)
+    // 3. Sắp xếp flashcards theo thuật toán ưu tiên Anki:
+    // Ưu tiên 1: Trạng thái (REVIEW > LEARNING > NEW)
+    // Ưu tiên 2: Thời gian hẹn gặp lại (Cái nào quá hạn lâu hơn xếp trước)
+    // Ưu tiên 3: Vị trí gốc (col_index)
     flashcards.sort((a, b) {
-      int getPriority(String status) {
-        if (status == 'REVIEW') return 1;
-        if (status == 'LEARNING') return 2;
-        return 3;
+      int getStatusPriority(String status) {
+        switch (status) {
+          case 'REVIEW': return 1;
+          case 'LEARNING': return 2;
+          case 'NEW': return 3;
+          default: return 4;
+        }
       }
       
-      final pA = getPriority(a['studyState']['status']);
-      final pB = getPriority(b['studyState']['status']);
+      final stateA = a['studyState'];
+      final stateB = b['studyState'];
+
+      // So sánh theo mức độ ưu tiên trạng thái
+      int priorityA = getStatusPriority(stateA['status']);
+      int priorityB = getStatusPriority(stateB['status']);
       
-      if (pA != pB) return pA.compareTo(pB);
+      if (priorityA != priorityB) {
+        return priorityA.compareTo(priorityB);
+      }
+
+      // Nếu cùng trạng thái, so sánh theo ngày hẹn (nextReview)
+      // Những thẻ có nextReview nhỏ hơn (quá hạn lâu hơn) sẽ hiện lên trước
+      DateTime dateA = DateTime.parse(stateA['nextReview']);
+      DateTime dateB = DateTime.parse(stateB['nextReview']);
       
-      // Nếu cùng status, so sánh nextReview
-      final nextA = DateTime.parse(a['studyState']['nextReview']);
-      final nextB = DateTime.parse(b['studyState']['nextReview']);
-      return nextA.compareTo(nextB);
+      if (dateA != dateB) {
+        return dateA.compareTo(dateB);
+      }
+
+      // Cuối cùng là so sánh theo vị trí sắp xếp gốc của bộ bài
+      return (a['colIndex'] as int).compareTo(b['colIndex'] as int);
     });
 
     return {

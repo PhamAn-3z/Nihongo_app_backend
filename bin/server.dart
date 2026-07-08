@@ -27,7 +27,6 @@ import 'package:flashcard_quiz_backend/controllers/promo_code_controller.dart';
 import 'package:flashcard_quiz_backend/controllers/receipt_controller.dart';
 import 'package:flashcard_quiz_backend/controllers/user_stats_controller.dart';
 
-
 import 'package:flashcard_quiz_backend/routes/auth_routes.dart';
 import 'package:flashcard_quiz_backend/routes/user_routes.dart';
 import 'package:flashcard_quiz_backend/routes/membership_routes.dart';
@@ -52,6 +51,12 @@ import 'package:flashcard_quiz_backend/services/notification_service.dart';
 import 'package:flashcard_quiz_backend/controllers/notification_controller.dart';
 import 'package:flashcard_quiz_backend/routes/notification_routes.dart';
 
+// Import Study Logs
+import 'package:flashcard_quiz_backend/repositories/study_log_repository.dart';
+import 'package:flashcard_quiz_backend/services/study_log_service.dart';
+import 'package:flashcard_quiz_backend/controllers/study_log_controller.dart';
+import 'package:flashcard_quiz_backend/routes/study_log_routes.dart';
+
 import 'package:flashcard_quiz_backend/middlewares/auth_middleware.dart';
 import 'package:flashcard_quiz_backend/middlewares/cors_middleware.dart';
 
@@ -64,7 +69,7 @@ void main() async {
   final String supabaseKey = env['SUPABASE_KEY'] ?? '';
 
   if (supabaseUrl.isEmpty || supabaseKey.isEmpty) {
-    print('From sever.dart:  Lỗi: Chưa cấu hình SUPABASE_URL hoặc SUPABASE_KEY trong file .env. Hãy lấy key trong zalo');
+    print('❌ Lỗi: Chưa cấu hình SUPABASE_URL hoặc SUPABASE_KEY trong file .env');
     return;
   }
 
@@ -106,12 +111,17 @@ void main() async {
   final vnpayController = VnPayController(vnpayService, receiptService);
   final deckController = DeckController(deckService);
 
+  // Study Log Layer
+  final studyLogRepo = StudyLogRepository(supabaseClient);
+  final studyLogService = StudyLogService(studyLogRepo);
+  final studyLogController = StudyLogController(studyLogService);
+
   // Notification Layer
   final notificationRepository = NotificationRepository(supabaseClient);
   final notificationService = NotificationService(notificationRepository);
   final notificationController = NotificationController(notificationService);
 
-  // 2.1 Start Background Cleanup Task (Every 5 minutes)
+  // 2.1 Start Background Cleanup Task
   Timer.periodic(Duration(minutes: 30), (timer) async {
     print('🧹 [${DateTime.now()}] Running background cleanup: Deleting expired unpaid receipts...');
     try {
@@ -135,6 +145,7 @@ void main() async {
   router.mount('/api/v1/decks', deckRoutes(deckController));
   router.mount('/api/v1/comments', commentRoutes(deckController));
   router.mount('/api/v1/notifications', notificationRoutes(notificationController));
+  router.mount('/api/v1/study-logs', studyLogRoutes(studyLogController));
 
   // 5. Route được bảo vệ (Yêu cầu JWT Token)
   router.get('/api/v1/user/profile', (Request request) {
@@ -147,17 +158,19 @@ void main() async {
   // 6. Cấu hình Middleware Pipeline
   final handler = Pipeline()
       .addMiddleware(logRequests())
-      .addMiddleware(corsMiddleware()) // <-- thêm lại CORS
+      .addMiddleware(corsMiddleware())
       .addMiddleware((Handler innerHandler) {
     return (Request request) {
-      if (request.url.path.startsWith('api/v1/profile') ||
-          request.url.path.startsWith('api/v1/stats') ||
-          request.url.path.startsWith('api/v1/receipts')||
-          request.url.path.contains('api/v1/decks') ||
-          request.url.path.contains('api/v1/comments') ||
-          request.url.path.contains('api/v1/user') ||
-          request.url.path.contains('api/v1/notifications') ||
-          request.url.path.endsWith('auth/logout')) {
+      final path = request.url.path;
+      if (path.startsWith('api/v1/profile') ||
+          path.startsWith('api/v1/stats') ||
+          path.startsWith('api/v1/receipts')||
+          path.contains('api/v1/decks') ||
+          path.contains('api/v1/comments') ||
+          path.contains('api/v1/user') ||
+          path.contains('api/v1/notifications') ||
+          path.contains('api/v1/study-logs') ||
+          path.endsWith('auth/logout')) {
         return authMiddleware()(innerHandler)(request);
       }
 
@@ -173,7 +186,7 @@ void main() async {
   print('🚀 SERVER ĐANG CHẠY TẠI: http://${server.address.host}:${server.port}');
   print('💡 Mẹo: Bạn có thể dùng địa chỉ IP máy tính để test nội bộ (ví dụ: http://192.168.1.x:8080)');
   
-  // Khởi động SSH Tunnel tự động (Không bắt buộc, không chặn luồng chính)
+  // Khởi động SSH Tunnel tự động
   _startSshTunnel(port);
 }
 
@@ -181,17 +194,14 @@ void _startSshTunnel(int port) async {
   try {
     print('🔑 Đang khởi tạo SSH Tunnel qua localhost.run (Vui lòng đợi giây lát)...');
     
-    // Sử dụng -n để tránh treo do đợi input, và thêm -T để tắt pty
     final process = await Process.start(
       'ssh',
       ['-n', '-T', '-o', 'StrictHostKeyChecking=no', '-R', '80:127.0.0.1:$port', 'nokey@localhost.run'],
       runInShell: true,
     );
 
-    // Biến để theo dõi xem đã lấy được URL chưa
     bool tunnelStarted = false;
 
-    // Lắng nghe stdout để lấy URL tunnel
     process.stdout.transform(utf8.decoder).transform(const LineSplitter()).listen((line) {
       if (line.contains('.lhr.life')) {
         final regExp = RegExp(r'https://[a-zA-Z0-9\.]+');
@@ -204,34 +214,25 @@ void _startSshTunnel(int port) async {
           print('✅ Bạn có thể dùng link này để test VNPay từ xa.\n');
         }
       }
-      // Log các dòng khác từ localhost.run nếu cần debug
-      if (!tunnelStarted && line.isNotEmpty) {
-        // print('DEBUG SSH: $line');
-      }
     });
 
-    // Lắng nghe stderr
     process.stderr.transform(utf8.decoder).transform(const LineSplitter()).listen((line) {
       if (line.toLowerCase().contains('permission denied') || line.toLowerCase().contains('failed')) {
         print('⚠️  SSH Tunnel Error: $line');
       }
     });
 
-    // Kiểm tra nếu sau 15 giây vẫn chưa có tunnel thì thông báo cho người dùng
     Future.delayed(const Duration(seconds: 15), () {
       if (!tunnelStarted) {
         print('⏳ Việc tạo Tunnel đang mất nhiều thời gian hơn dự kiến.');
-        print('👉 Bạn vẫn có thể test bằng IP nội bộ hoặc kiểm tra lại kết nối mạng/SSH.');
       }
     });
 
-    // Đảm bảo kill SSH process khi server dừng (Ctrl+C)
     ProcessSignal.sigint.watch().listen((_) {
       process.kill();
       exit(0);
     });
   } catch (e) {
     print('❌ Không thể khởi động lệnh SSH: $e');
-    print('📌 Hãy đảm bảo bạn đã cài đặt OpenSSH (gõ "ssh" trong cmd để kiểm tra).');
   }
 }

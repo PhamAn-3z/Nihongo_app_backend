@@ -15,6 +15,7 @@ CREATE TABLE public.users (
   password_hash text NOT NULL,
   created_at timestamp without time zone DEFAULT now(),
   last_login_at timestamp without time zone,
+  email_verified boolean DEFAULT false,
   CONSTRAINT users_pkey PRIMARY KEY (user_id),
   CONSTRAINT users_role_id_fkey FOREIGN KEY (role_id) REFERENCES public.roles(role_id)
 );
@@ -38,14 +39,14 @@ CREATE TABLE public.user_stats (
   membership_id integer DEFAULT 1,
   is_active boolean DEFAULT true,
   last_study_date date,
-  membership_expired_date timestamp without time zone,
+  membership_expired_date date,
   CONSTRAINT user_stats_pkey PRIMARY KEY (user_id),
   CONSTRAINT user_stats_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(user_id),
   CONSTRAINT user_stats_membership_id_fkey FOREIGN KEY (membership_id) REFERENCES public.Membership(id)
 );
 CREATE TABLE public.Membership (
   id integer NOT NULL DEFAULT nextval('"Membership_id_seq"'::regclass),
-  Duration integer NOT NULL,
+  Duration bigint NOT NULL,
   membershipRank character varying NOT NULL,
   price double precision NOT NULL,
   maxFlashcardSet integer NOT NULL,
@@ -268,3 +269,130 @@ CREATE TABLE public.comment_reports (
   CONSTRAINT fk_reports_comment FOREIGN KEY (comment_id) REFERENCES public.deck_comments(comment_id),
   CONSTRAINT fk_reports_reporter FOREIGN KEY (reporter_id) REFERENCES public.users(user_id)
 );
+CREATE TABLE public.email_verifications (
+  id uuid NOT NULL,
+  user_id integer NOT NULL,
+  otp_code character varying NOT NULL,
+  expires_at timestamp without time zone NOT NULL,
+  verified boolean DEFAULT false,
+  created_at timestamp without time zone DEFAULT now(),
+  CONSTRAINT email_verifications_pkey PRIMARY KEY (id),
+  CONSTRAINT fk_email_verifications_user FOREIGN KEY (user_id) REFERENCES public.users(user_id)
+);
+
+--------------------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION process_study_session(
+    p_user_id INT,
+    p_deck_id INT,
+    p_cards_learned INT,
+    p_cards_reviewed INT,
+    p_duration_seconds INT,
+    p_card_ratings JSONB
+) RETURNS JSONB LANGUAGE plpgsql AS $$
+DECLARE
+    v_exp_gained INT;
+    v_new_streak INT;
+    v_new_max_streak INT;
+    v_new_total_exp INT;
+    v_last_date DATE;
+    v_today DATE := CURRENT_DATE;
+    v_yesterday DATE := CURRENT_DATE - INTERVAL '1 day';
+    v_rating_item RECORD;
+    v_old_ef NUMERIC;
+    v_old_interval INT;
+    v_old_rev_count INT;
+    v_new_status VARCHAR;
+    v_new_ef NUMERIC;
+    v_new_interval INT;
+BEGIN
+    -- 1. Ghi nhật ký phiên học
+    INSERT INTO public.flashcard_study_logs (user_id, deck_id, cards_learned, cards_reviewed, duration_seconds, studied_at)
+    VALUES (p_user_id, p_deck_id, p_cards_learned, p_cards_reviewed, p_duration_seconds, NOW());
+
+    -- 2. Cập nhật ngày học bộ đề
+    UPDATE public.user_decks
+    SET last_studied_at = NOW()
+    WHERE user_id = p_user_id AND deck_id = p_deck_id;
+
+    -- 3. Tính toán Streak và EXP (Học mới: 10, Ôn tập: 2)
+    v_exp_gained := (p_cards_learned * 10) + (p_cards_reviewed * 2);
+
+    SELECT
+        COALESCE(current_streak, 0),
+        COALESCE(max_streak, 0),
+        COALESCE(total_exp, 0),
+        last_study_date
+    INTO v_new_streak, v_new_max_streak, v_new_total_exp, v_last_date
+    FROM public.user_stats WHERE user_id = p_user_id;
+
+    IF NOT FOUND THEN
+        v_new_streak := 0; v_new_max_streak := 0; v_new_total_exp := 0; v_last_date := NULL;
+        INSERT INTO public.user_stats (user_id, current_streak, max_streak, total_exp) VALUES (p_user_id, 0, 0, 0);
+    END IF;
+
+    IF v_last_date = v_yesterday THEN v_new_streak := v_new_streak + 1;
+    ELSIF v_last_date IS NULL OR v_last_date < v_yesterday THEN v_new_streak := 1;
+    END IF;
+
+    IF v_new_streak > v_new_max_streak THEN v_new_max_streak := v_new_streak; END IF;
+    v_new_total_exp := v_new_total_exp + v_exp_gained;
+
+    UPDATE public.user_stats
+    SET current_streak = v_new_streak, max_streak = v_new_max_streak,
+        total_exp = v_new_total_exp, last_study_date = v_today
+    WHERE user_id = p_user_id;
+
+    -- 4. Xử lý logic 3 mức độ Ghi nhớ (AGAIN, GOOD, EASY)
+    IF p_card_ratings IS NOT NULL AND jsonb_array_length(p_card_ratings) > 0 THEN
+        FOR v_rating_item IN SELECT * FROM jsonb_to_recordset(p_card_ratings) AS x(position_id INT, rating TEXT)
+        LOOP
+            SELECT COALESCE(ease_factor, 2.5), COALESCE(interval, 0), COALESCE(review_count, 0)
+            INTO v_old_ef, v_old_interval, v_old_rev_count
+            FROM public.users_positions WHERE user_id = p_user_id AND position_id = v_rating_item.position_id;
+
+            IF NOT FOUND THEN v_old_ef := 2.5; v_old_interval := 0; v_old_rev_count := 0; END IF;
+
+            -- 🎯 Logic SM-2 cụ thể cho 3 nút:
+            IF v_rating_item.rating = 'AGAIN' THEN
+                -- Quên hoàn toàn: Chuyển về LEARNING, reset khoảng thời gian
+                v_new_status := 'LEARNING';
+                v_new_interval := 0;
+                v_new_ef := GREATEST(1.3, v_old_ef - 0.2); -- Giảm độ dễ
+
+            ELSIF v_rating_item.rating = 'GOOD' THEN
+                -- Nhớ ổn: Chuyển về REVIEW, tăng khoảng thời gian theo EF
+                v_new_status := 'REVIEW';
+                v_new_ef := v_old_ef; -- Giữ nguyên độ dễ
+                IF v_old_interval = 0 THEN v_new_interval := 1;
+                ELSIF v_old_interval = 1 THEN v_new_interval := 6;
+                ELSE v_new_interval := ROUND(v_old_interval * v_old_ef); END IF;
+
+            ELSIF v_rating_item.rating = 'EASY' THEN
+                -- Nhớ rất tốt: Chuyển về REVIEW, tăng mạnh khoảng thời gian
+                v_new_status := 'REVIEW';
+                v_new_ef := v_old_ef + 0.15; -- Tăng độ dễ
+                IF v_old_interval = 0 THEN v_new_interval := 4;
+                ELSE v_new_interval := ROUND(v_old_interval * v_old_ef * 1.3); END IF;
+
+            ELSE
+                CONTINUE; -- Bỏ qua nếu rating không hợp lệ
+            END IF;
+
+            -- Lưu lại kết quả học tập cho thẻ
+            INSERT INTO public.users_positions (user_id, position_id, status, ease_factor, interval, review_count, next_review, last_reviewed_at)
+            VALUES (p_user_id, v_rating_item.position_id, v_new_status, v_new_ef, v_new_interval, v_old_rev_count + 1, NOW() + (v_new_interval || ' days')::interval, NOW())
+            ON CONFLICT (user_id, position_id) DO UPDATE SET
+                status = EXCLUDED.status, ease_factor = EXCLUDED.ease_factor, interval = EXCLUDED.interval,
+                review_count = users_positions.review_count + 1, next_review = EXCLUDED.next_review, last_reviewed_at = EXCLUDED.last_reviewed_at;
+        END LOOP;
+    END IF;
+
+    RETURN jsonb_build_object(
+        'expGained', v_exp_gained,
+        'currentStreak', v_new_streak,
+        'maxStreak', v_new_max_streak,
+        'totalExp', v_new_total_exp
+    );
+END;
+$$;
