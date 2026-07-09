@@ -15,6 +15,16 @@ class UserRepository {
     return (response as List).isEmpty ? null : response.first;
   }
 
+  // Tìm user theo username
+  Future<Map<String, dynamic>?> findByUsername(String username) async {
+    final response = await supabase
+        .from('users')
+        .select()
+        .eq('username', username);
+
+    return (response as List).isEmpty ? null : response.first;
+  }
+
   // Tìm user theo user_id
   Future<Map<String, dynamic>?> findById(String userId) async {
     final response = await supabase
@@ -32,5 +42,13 @@ class UserRepository {
         .insert(user)
         .select();
     return (response as List).isEmpty ? null : response.first;
+  }
+
+  // Cập nhật trạng thái xác thực email
+  Future<void> markEmailAsVerified(int userId) async {
+    await supabase
+        .from('users')
+        .update({'email_verified': true})
+        .eq('user_id', userId);
   }
 }

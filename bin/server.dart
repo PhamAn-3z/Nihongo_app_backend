@@ -7,26 +7,42 @@ import 'package:shelf_router/shelf_router.dart';
 import 'package:supabase/supabase.dart';
 import 'package:dotenv/dotenv.dart';
 
-// Import các layer theo kiến trúc Spring Boot
+// Repositories
 import 'package:flashcard_quiz_backend/repositories/user_repository.dart';
 import 'package:flashcard_quiz_backend/repositories/membership_repository.dart';
 import 'package:flashcard_quiz_backend/repositories/promo_code_repository.dart';
 import 'package:flashcard_quiz_backend/repositories/receipt_repository.dart';
 import 'package:flashcard_quiz_backend/repositories/user_stats_repository.dart';
+import 'package:flashcard_quiz_backend/repositories/email_verification_repository.dart';
+import 'package:flashcard_quiz_backend/repositories/deck_repository.dart';
+import 'package:flashcard_quiz_backend/repositories/study_log_repository.dart';
+import 'package:flashcard_quiz_backend/repositories/notification_repository.dart';
 
+// Services
 import 'package:flashcard_quiz_backend/services/auth_service.dart';
 import 'package:flashcard_quiz_backend/services/membership_service.dart';
 import 'package:flashcard_quiz_backend/services/promo_code_service.dart';
 import 'package:flashcard_quiz_backend/services/receipt_service.dart';
 import 'package:flashcard_quiz_backend/services/user_stats_service.dart';
+import 'package:flashcard_quiz_backend/services/email_service.dart';
+import 'package:flashcard_quiz_backend/services/vnpay_service.dart';
+import 'package:flashcard_quiz_backend/services/deck_service.dart';
+import 'package:flashcard_quiz_backend/services/notification_service.dart';
+import 'package:flashcard_quiz_backend/services/study_log_service.dart';
 
+// Controllers
 import 'package:flashcard_quiz_backend/controllers/auth_controller.dart';
 import 'package:flashcard_quiz_backend/controllers/user_controller.dart';
 import 'package:flashcard_quiz_backend/controllers/membership_controller.dart';
 import 'package:flashcard_quiz_backend/controllers/promo_code_controller.dart';
 import 'package:flashcard_quiz_backend/controllers/receipt_controller.dart';
 import 'package:flashcard_quiz_backend/controllers/user_stats_controller.dart';
+import 'package:flashcard_quiz_backend/controllers/vnpay_controller.dart';
+import 'package:flashcard_quiz_backend/controllers/deck_controller.dart';
+import 'package:flashcard_quiz_backend/controllers/notification_controller.dart';
+import 'package:flashcard_quiz_backend/controllers/study_log_controller.dart';
 
+// Routes
 import 'package:flashcard_quiz_backend/routes/auth_routes.dart';
 import 'package:flashcard_quiz_backend/routes/user_routes.dart';
 import 'package:flashcard_quiz_backend/routes/membership_routes.dart';
@@ -34,37 +50,17 @@ import 'package:flashcard_quiz_backend/routes/promo_code_routes.dart';
 import 'package:flashcard_quiz_backend/routes/receipt_routes.dart';
 import 'package:flashcard_quiz_backend/routes/user_stats_routes.dart';
 import 'package:flashcard_quiz_backend/routes/vnpay_routes.dart';
-
-import 'package:flashcard_quiz_backend/services/vnpay_service.dart';
-import 'package:flashcard_quiz_backend/controllers/vnpay_controller.dart';
-
-// Import Decks
-import 'package:flashcard_quiz_backend/repositories/deck_repository.dart';
-import 'package:flashcard_quiz_backend/services/deck_service.dart';
-import 'package:flashcard_quiz_backend/controllers/deck_controller.dart';
 import 'package:flashcard_quiz_backend/routes/deck_routes.dart';
 import 'package:flashcard_quiz_backend/routes/comment_routes.dart';
-
-// Import Notifications
-import 'package:flashcard_quiz_backend/repositories/notification_repository.dart';
-import 'package:flashcard_quiz_backend/services/notification_service.dart';
-import 'package:flashcard_quiz_backend/controllers/notification_controller.dart';
 import 'package:flashcard_quiz_backend/routes/notification_routes.dart';
-
-// Import Study Logs
-import 'package:flashcard_quiz_backend/repositories/study_log_repository.dart';
-import 'package:flashcard_quiz_backend/services/study_log_service.dart';
-import 'package:flashcard_quiz_backend/controllers/study_log_controller.dart';
 import 'package:flashcard_quiz_backend/routes/study_log_routes.dart';
 
 import 'package:flashcard_quiz_backend/middlewares/auth_middleware.dart';
 import 'package:flashcard_quiz_backend/middlewares/cors_middleware.dart';
 
 void main() async {
-  // Tải biến môi trường từ file .env
   final env = DotEnv(includePlatformEnvironment: true)..load();
 
-  // 1. Cấu hình kết nối Supabase
   final String supabaseUrl = env['SUPABASE_URL'] ?? '';
   final String supabaseKey = env['SUPABASE_KEY'] ?? '';
 
@@ -76,16 +72,29 @@ void main() async {
   final supabaseClient = SupabaseClient(supabaseUrl, supabaseKey);
   print('🔌 Đang thiết lập kết nối đến Supabase Cloud...');
 
-  // 2. Khởi tạo các thành phần (Dependency Injection)
+  // SMTP Config
+  final String smtpEmail = env['SMTP_EMAIL'] ?? '';
+  final String smtpPassword = env['SMTP_PASSWORD'] ?? '';
+  final emailService = EmailService(smtpEmail, smtpPassword);
+
+  // Repositories
   final userRepository = UserRepository(supabaseClient);
   final userStatsRepository = UserStatsRepository(supabaseClient);
-  final authService = AuthService(userRepository, userStatsRepository);
-
+  final emailVerificationRepository = EmailVerificationRepository(supabaseClient);
   final membershipRepository = MembershipRepository(supabaseClient);
   final promoCodeRepository = PromoCodeRepository(supabaseClient);
   final receiptRepository = ReceiptRepository(supabaseClient);
+  final deckRepository = DeckRepository(supabaseClient);
+  final studyLogRepo = StudyLogRepository(supabaseClient);
+  final notificationRepository = NotificationRepository(supabaseClient);
 
   // Services
+  final authService = AuthService(
+    userRepository: userRepository,
+    userStatsRepository: userStatsRepository,
+    emailVerificationRepository: emailVerificationRepository,
+    emailService: emailService,
+  );
   final membershipService = MembershipService(membershipRepository);
   final promoCodeService = PromoCodeService(promoCodeRepository);
   final receiptService = ReceiptService(
@@ -96,10 +105,9 @@ void main() async {
   );
   final userStatsService = UserStatsService(userStatsRepository);
   final vnpayService = VnPayService();
-  
-  // Deck Layer
-  final deckRepository = DeckRepository(supabaseClient);
   final deckService = DeckService(deckRepository);
+  final studyLogService = StudyLogService(studyLogRepo);
+  final notificationService = NotificationService(notificationRepository);
 
   // Controllers
   final authController = AuthController(authService);
@@ -110,18 +118,10 @@ void main() async {
   final userStatsController = UserStatsController(userStatsService);
   final vnpayController = VnPayController(vnpayService, receiptService);
   final deckController = DeckController(deckService);
-
-  // Study Log Layer
-  final studyLogRepo = StudyLogRepository(supabaseClient);
-  final studyLogService = StudyLogService(studyLogRepo);
   final studyLogController = StudyLogController(studyLogService);
-
-  // Notification Layer
-  final notificationRepository = NotificationRepository(supabaseClient);
-  final notificationService = NotificationService(notificationRepository);
   final notificationController = NotificationController(notificationService);
 
-  // 2.1 Start Background Cleanup Task
+  // Background Cleanup Task
   Timer.periodic(Duration(minutes: 30), (timer) async {
     print('🧹 [${DateTime.now()}] Running background cleanup: Deleting expired unpaid receipts...');
     try {
@@ -131,10 +131,8 @@ void main() async {
     }
   });
 
-  // 3. Khởi tạo Router chính
   final router = Router();
 
-  // Mount các sub-routes
   router.mount('/api/v1/auth', authRoutes(authController));
   router.mount('/api/v1/user/', userRoutes(userController));
   router.mount('/api/v1/memberships', membershipRoutes(membershipController));
@@ -147,7 +145,6 @@ void main() async {
   router.mount('/api/v1/notifications', notificationRoutes(notificationController));
   router.mount('/api/v1/study-logs', studyLogRoutes(studyLogController));
 
-  // 5. Route được bảo vệ (Yêu cầu JWT Token)
   router.get('/api/v1/user/profile', (Request request) {
     return Response.ok(
       jsonEncode({"message": "Chào mừng! Bạn đã truy cập được vào dữ liệu yêu cầu bảo mật."}),
@@ -155,13 +152,21 @@ void main() async {
     );
   });
 
-  // 6. Cấu hình Middleware Pipeline
   final handler = Pipeline()
       .addMiddleware(logRequests())
       .addMiddleware(corsMiddleware())
       .addMiddleware((Handler innerHandler) {
     return (Request request) {
       final path = request.url.path;
+
+      // Whitelist routes công khai
+      if (path.contains('auth/login') || 
+          path.contains('auth/register') || 
+          path.contains('auth/verify-otp') || 
+          path.contains('auth/resend-otp')) {
+        return innerHandler(request);
+      }
+
       if (path.startsWith('api/v1/profile') ||
           path.startsWith('api/v1/stats') ||
           path.startsWith('api/v1/receipts')||
@@ -177,23 +182,19 @@ void main() async {
       return innerHandler(request);
     };
   })
-      .addHandler(router);
+  .addHandler(router);
 
-  // 6. Khởi chạy Server
   final port = int.parse(Platform.environment['PORT'] ?? '8080');
   final server = await shelf_io.serve(handler, InternetAddress.anyIPv4, port);
 
   print('🚀 SERVER ĐANG CHẠY TẠI: http://${server.address.host}:${server.port}');
-  print('💡 Mẹo: Bạn có thể dùng địa chỉ IP máy tính để test nội bộ (ví dụ: http://192.168.1.x:8080)');
   
-  // Khởi động SSH Tunnel tự động
   _startSshTunnel(port);
 }
 
 void _startSshTunnel(int port) async {
   try {
-    print('🔑 Đang khởi tạo SSH Tunnel qua localhost.run (Vui lòng đợi giây lát)...');
-    
+    print('🔑 Đang khởi tạo SSH Tunnel qua localhost.run...');
     final process = await Process.start(
       'ssh',
       ['-n', '-T', '-o', 'StrictHostKeyChecking=no', '-R', '80:127.0.0.1:$port', 'nokey@localhost.run'],
@@ -201,7 +202,6 @@ void _startSshTunnel(int port) async {
     );
 
     bool tunnelStarted = false;
-
     process.stdout.transform(utf8.decoder).transform(const LineSplitter()).listen((line) {
       if (line.contains('.lhr.life')) {
         final regExp = RegExp(r'https://[a-zA-Z0-9\.]+');
@@ -210,21 +210,8 @@ void _startSshTunnel(int port) async {
           final tunnelUrl = match.group(0)!;
           VnPayController.activeTunnelUrl = tunnelUrl;
           tunnelStarted = true;
-          print('\n🌍 SSH TUNNEL ĐANG HOẠT ĐỘNG TẠI: $tunnelUrl');
-          print('✅ Bạn có thể dùng link này để test VNPay từ xa.\n');
+          print('🌍 SSH TUNNEL ĐANG HOẠT ĐỘNG TẠI: $tunnelUrl');
         }
-      }
-    });
-
-    process.stderr.transform(utf8.decoder).transform(const LineSplitter()).listen((line) {
-      if (line.toLowerCase().contains('permission denied') || line.toLowerCase().contains('failed')) {
-        print('⚠️  SSH Tunnel Error: $line');
-      }
-    });
-
-    Future.delayed(const Duration(seconds: 15), () {
-      if (!tunnelStarted) {
-        print('⏳ Việc tạo Tunnel đang mất nhiều thời gian hơn dự kiến.');
       }
     });
 
