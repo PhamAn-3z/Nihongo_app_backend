@@ -159,11 +159,12 @@ void main() async {
     return (Request request) {
       final path = request.url.path;
 
-      // Whitelist routes công khai
+      // Whitelist các routes công khai
       if (path.contains('auth/login') || 
           path.contains('auth/register') || 
           path.contains('auth/verify-otp') || 
-          path.contains('auth/resend-otp')) {
+          path.contains('auth/resend-otp') ||
+          path.contains('api/v1/decks/explore')) {
         return innerHandler(request);
       }
 

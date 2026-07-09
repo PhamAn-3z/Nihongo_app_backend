@@ -26,6 +26,175 @@ class DeckService {
     );
   }
 
+  Future<List<Map<String, dynamic>>> getExploreDecks({
+    String? searchTerm,
+    int page = 1,
+    int limit = 10,
+    String sortBy = 'created_at',
+    bool ascending = false,
+    int? currentUserId,
+    String filter = 'all', // all, not_in_library, in_library
+  }) async {
+    // Gọi repo lấy dữ liệu
+    final List<dynamic> rawData = await _deckRepository.getExploreDecks(
+      searchTerm: searchTerm,
+      page: page,
+      limit: limit,
+      sortBy: sortBy,
+      ascending: ascending,
+      currentUserId: currentUserId,
+    );
+
+    final now = DateTime.now();
+    final todayStr = "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+
+    var processedList = rawData.map((item) {
+      final authorData = item['author'] as Map<String, dynamic>?;
+
+      // Lấy profile
+      final profilesRaw = authorData?['user_profiles'];
+      Map<String, dynamic>? authorProfile;
+      if (profilesRaw is List && profilesRaw.isNotEmpty) {
+        authorProfile = profilesRaw[0] as Map<String, dynamic>;
+      } else if (profilesRaw is Map) {
+        authorProfile = Map<String, dynamic>.from(profilesRaw);
+      }
+
+      // Tính toán thông số thẻ và Anki Stats
+      final List<dynamic> positions = item['positions'] ?? [];
+      final int cardCount = positions.length;
+      
+      int newCount = 0;
+      int learningCount = 0;
+      int dueCount = 0;
+
+      for (var pos in positions) {
+        final upRaw = pos['users_positions'];
+        List<dynamic> upList = [];
+        if (upRaw is List) {
+          upList = upRaw;
+        } else if (upRaw is Map) {
+          upList = [upRaw];
+        }
+
+        // Lọc đúng bản ghi của người đang xem (nếu có đăng nhập)
+        final up = currentUserId == null 
+            ? null 
+            : upList.firstWhere((u) => u['user_id'] == currentUserId, orElse: () => null);
+
+        if (up == null) {
+          newCount++;
+          continue;
+        }
+
+        final String status = up['status'] ?? 'NEW';
+        final String? nextReviewStr = up['next_review'];
+
+        if (status == 'NEW') {
+          newCount++;
+        } else if (status == 'LEARNING') {
+          learningCount++;
+        } else if (status == 'REVIEW') {
+          if (nextReviewStr != null) {
+            final nextReview = DateTime.parse(nextReviewStr);
+            if (nextReview.isBefore(now)) {
+              dueCount++;
+            }
+          }
+        }
+      }
+
+      // Đếm số người yêu thích và kiểm tra xem đã có trong thư viện chưa
+      final List<dynamic> userDecks = item['user_decks'] ?? [];
+      final int favoritesCount = userDecks.where((ud) => ud['is_favorite'] == true).length;
+      
+      final bool isInLibrary = currentUserId != null && 
+          userDecks.any((ud) => ud['user_id'] == currentUserId);
+
+      // Thống kê lượt xem (study logs)
+      final List<dynamic> studyLogs = item['flashcard_study_logs'] ?? [];
+      
+      // Lấy tổng lượt xem từ thuộc tính total_views vừa thêm ở Repo
+      final List<dynamic> totalViewsRaw = item['total_views'] ?? [];
+      final int totalViews = totalViewsRaw.isNotEmpty ? totalViewsRaw[0]['count'] : studyLogs.length;
+
+      final int viewsToday = studyLogs.where((log) {
+        final String? studiedAt = log['studied_at'];
+        return studiedAt != null && studiedAt.startsWith(todayStr);
+      }).length;
+
+      return {
+        'deckId': item['deck_id'],
+        'title': item['title'],
+        'createdAt': item['created_at'],
+        'publicStatus': item['public_status'],
+        'isInLibrary': isInLibrary,
+        'author': {
+          'username': authorData?['username'] ?? 'Ẩn danh',
+          'avatarUrl': authorProfile?['avatar_url']
+        },
+        'totalCards': cardCount,
+        'ankiStats': {
+          'newCount': newCount,
+          'learningCount': learningCount,
+          'dueCount': dueCount,
+        },
+        'stats': {
+          'favoritesCount': favoritesCount,
+          'totalViews': totalViews,
+          'viewsToday': viewsToday,
+        }
+      };
+    }).toList();
+
+    // Bước 1: Lọc dữ liệu (Filtering)
+    if (currentUserId != null) {
+      if (filter == 'not_in_library') {
+        processedList = processedList.where((d) => d['isInLibrary'] == false).toList();
+      } else if (filter == 'in_library') {
+        processedList = processedList.where((d) => d['isInLibrary'] == true).toList();
+      }
+    }
+
+    // Bước 2: Sắp xếp (Sorting)
+    // Nếu sortBy không phải là trường của DB, ta sắp xếp tại đây
+    final dbSortableFields = ['created_at', 'title'];
+    if (!dbSortableFields.contains(sortBy)) {
+      processedList.sort((a, b) {
+        dynamic valA;
+        dynamic valB;
+
+        if (sortBy == 'favorites') {
+          valA = a['stats']['favoritesCount'];
+          valB = b['stats']['favoritesCount'];
+        } else if (sortBy == 'views') {
+          valA = a['stats']['totalViews'];
+          valB = b['stats']['totalViews'];
+        } else if (sortBy == 'views_today') {
+          valA = a['stats']['viewsToday'];
+          valB = b['stats']['viewsToday'];
+        } else if (sortBy == 'in_library') {
+          valA = a['isInLibrary'] ? 1 : 0;
+          valB = b['isInLibrary'] ? 1 : 0;
+        } else {
+          return 0;
+        }
+
+        return ascending ? valA.compareTo(valB) : valB.compareTo(valA);
+      });
+    }
+
+    // Bước 3: Phân trang (Pagination) - Luôn thực hiện ở Service nếu có Filter hoặc Custom Sort
+    if (!dbSortableFields.contains(sortBy) || filter != 'all') {
+      final int start = (page - 1) * limit;
+      if (start >= processedList.length) return [];
+      final int end = (start + limit) > processedList.length ? processedList.length : (start + limit);
+      processedList = processedList.sublist(start, end);
+    }
+
+    return processedList;
+  }
+
   Future<List<dynamic>> getAllDecks() async {
     return await _deckRepository.getAllDecks();
   }
@@ -104,6 +273,7 @@ class DeckService {
         'publicStatus': deck['public_status'],
         'isFavorite': item['is_favorite'] ?? false,
         'lastStudiedAt': item['last_studied_at'],
+        'totalCards': positions.length, // Bổ sung trường này
         'author': {
           'username': authorData?['username'] ?? 'Ẩn danh',
           'avatarUrl': authorProfile?['avatar_url']
@@ -291,6 +461,107 @@ class DeckService {
       parentCommentId: parentCommentId,
       content: content,
     );
+  }
+
+  Future<List<Map<String, dynamic>>> getRecentlyViewedDecks(dynamic userId, {int limit = 10}) async {
+    final int formattedUserId = userId is String ? int.parse(userId) : userId as int;
+    final now = DateTime.now();
+
+    final List<dynamic> rawData = await _deckRepository.getRecentlyViewedDecks(formattedUserId, limit: limit);
+
+    // Bước 1: Lọc duy nhất deck_id (vì một deck có thể có nhiều log học tập)
+    final Map<int, Map<String, dynamic>> uniqueDecks = {};
+
+    for (var item in rawData) {
+      final deckData = item['decks'];
+      if (deckData == null) continue;
+
+      final int deckId = deckData['deck_id'];
+      if (!uniqueDecks.containsKey(deckId)) {
+        uniqueDecks[deckId] = item;
+      }
+      
+      // Dừng lại nếu đã đủ limit sau khi lọc unique
+      if (uniqueDecks.length >= limit) break;
+    }
+
+    // Bước 2: Xử lý dữ liệu và tính toán Anki Stats
+    return uniqueDecks.values.map((item) {
+      final deck = item['decks'] as Map<String, dynamic>;
+      final authorData = deck['author'] as Map<String, dynamic>?;
+      
+      // Lấy profile author
+      final profilesRaw = authorData?['user_profiles'];
+      Map<String, dynamic>? authorProfile;
+      if (profilesRaw is List && profilesRaw.isNotEmpty) {
+        authorProfile = profilesRaw[0] as Map<String, dynamic>;
+      } else if (profilesRaw is Map) {
+        authorProfile = Map<String, dynamic>.from(profilesRaw);
+      }
+
+      // Tính toán Anki Stats
+      final List<dynamic> positions = deck['positions'] ?? [];
+      int newCount = 0;
+      int learningCount = 0;
+      int dueCount = 0;
+
+      for (var pos in positions) {
+        final upRaw = pos['users_positions'];
+        List<dynamic> upList = (upRaw is List) ? upRaw : (upRaw != null ? [upRaw] : []);
+
+        final up = upList.firstWhere((u) => u['user_id'] == formattedUserId, orElse: () => null);
+
+        if (up == null) {
+          newCount++;
+          continue;
+        }
+
+        final String status = up['status'] ?? 'NEW';
+        if (status == 'NEW') newCount++;
+        else if (status == 'LEARNING') learningCount++;
+        else if (status == 'REVIEW') {
+          final String? nextReviewStr = up['next_review'];
+          if (nextReviewStr != null && DateTime.parse(nextReviewStr).isBefore(now)) {
+            dueCount++;
+          }
+        }
+      }
+
+      // Kiểm tra trạng thái yêu thích từ bảng user_decks (nếu có)
+      final List<dynamic> userDecksList = deck['user_decks'] ?? [];
+      final userDeck = userDecksList.firstWhere(
+        (ud) => ud['user_id'] == formattedUserId, 
+        orElse: () => null
+      );
+
+      return {
+        'deckId': deck['deck_id'],
+        'title': deck['title'],
+        'lastStudiedAt': item['studied_at'],
+        'isFavorite': userDeck != null ? (userDeck['is_favorite'] ?? false) : false,
+        'authorName': authorData?['username'] ?? 'Ẩn danh',
+        'authorAvatar': authorProfile?['avatar_url'],
+        'totalCards': positions.length,
+        'newCount': newCount,
+        'learningCount': learningCount,
+        'dueCount': dueCount,
+        'lastSession': {
+          'learned': item['cards_learned'] ?? 0,
+          'reviewed': item['cards_reviewed'] ?? 0,
+          'seconds': item['duration_seconds'] ?? 0,
+        }
+      };
+    }).toList();
+  }
+
+  Future<void> saveDeckToLibrary(int deckId, dynamic userId) async {
+    final int formattedUserId = userId is String ? int.parse(userId) : userId as int;
+    await _deckRepository.saveDeckToLibrary(formattedUserId, deckId);
+  }
+
+  Future<void> unsaveDeck(int deckId, dynamic userId) async {
+    final int formattedUserId = userId is String ? int.parse(userId) : userId as int;
+    await _deckRepository.unsaveDeck(formattedUserId, deckId);
   }
 
   Future<void> deleteComment({
