@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 import '../services/deck_service.dart';
+import '../services/jwt_service.dart';
 
 class DeckController {
   final DeckService _deckService;
@@ -54,6 +55,73 @@ class DeckController {
       final decks = await _deckService.getAllDecks();
       return Response.ok(
         jsonEncode({"success": true, "data": decks}),
+        headers: {'content-type': 'application/json'},
+      );
+    } catch (e) {
+      return Response.internalServerError(
+        body: jsonEncode({"success": false, "message": e.toString()}),
+        headers: {'content-type': 'application/json'},
+      );
+    }
+  }
+
+  Future<Response> getExploreDecks(Request request) async {
+    try {
+      final queryParams = request.url.queryParameters;
+      final String? searchTerm = queryParams['q'];
+      final int page = int.tryParse(queryParams['page'] ?? '1') ?? 1;
+      final int limit = int.tryParse(queryParams['limit'] ?? '10') ?? 10;
+      
+      // Sorting & Filtering params
+      final String sortBy = queryParams['sortBy'] ?? 'created_at';
+      final bool ascending = queryParams['order'] == 'asc';
+      final String filter = queryParams['filter'] ?? 'all'; // all, not_in_library, in_library
+
+      // Optional Authentication: Thử lấy userId nếu có token gửi kèm
+      int? currentUserId;
+      // ... (giữ nguyên logic lấy currentUserId)
+      final authHeader = request.headers['Authorization'];
+      if (authHeader != null && authHeader.startsWith('Bearer ')) {
+        try {
+          final token = authHeader.replaceFirst('Bearer ', '');
+          final jwt = JwtService.verifyToken(token);
+          final payload = jwt.payload;
+          if (payload['userId'] != null) {
+            currentUserId = payload['userId'] is String 
+                ? int.parse(payload['userId']) 
+                : payload['userId'] as int;
+          }
+        } catch (_) {
+          // Nếu token lỗi thì coi như khách vãng lai, không chặn request
+        }
+      }
+
+      final decks = await _deckService.getExploreDecks(
+        searchTerm: searchTerm,
+        page: page,
+        limit: limit,
+        sortBy: sortBy,
+        ascending: ascending,
+        currentUserId: currentUserId,
+        filter: filter,
+      );
+      
+      return Response.ok(
+        jsonEncode({
+          "success": true,
+          "message": searchTerm != null && searchTerm.isNotEmpty 
+              ? "Kết quả tìm kiếm cho '$searchTerm' (Trang $page)" 
+              : "Lấy danh sách bộ đề công khai thành công! (Trang $page)",
+          "pagination": {
+            "currentPage": page,
+            "limit": limit,
+            "count": decks.length,
+            "sortBy": sortBy,
+            "order": ascending ? 'asc' : 'desc',
+            "filter": filter
+          },
+          "data": decks
+        }),
         headers: {'content-type': 'application/json'},
       );
     } catch (e) {
@@ -274,6 +342,107 @@ class DeckController {
           : errorMsg;
 
       return Response(404, // Not Found hoặc 400 tùy trường hợp, ở đây đa số là 404
+        body: jsonEncode({"success": false, "message": message}),
+        headers: {'content-type': 'application/json'},
+      );
+    }
+  }
+
+  Future<Response> getRecentlyViewedDecks(Request request) async {
+    try {
+      final payload = request.context['authPayload'] as Map<String, dynamic>?;
+      if (payload == null || payload['userId'] == null) {
+        return Response.forbidden(jsonEncode({'message': 'Unauthorized'}));
+      }
+
+      final dynamic userId = payload['userId'];
+      final queryParams = request.url.queryParameters;
+      final int limit = int.tryParse(queryParams['limit'] ?? '10') ?? 10;
+
+      final decks = await _deckService.getRecentlyViewedDecks(userId, limit: limit);
+
+      return Response.ok(
+        jsonEncode({
+          "success": true,
+          "message": "Lấy danh sách bộ đề đã học gần đây thành công!",
+          "data": decks
+        }),
+        headers: {'content-type': 'application/json'},
+      );
+    } catch (e) {
+      return Response.internalServerError(
+        body: jsonEncode({"success": false, "message": e.toString()}),
+        headers: {'content-type': 'application/json'},
+      );
+    }
+  }
+
+  Future<Response> saveDeck(Request request) async {
+    try {
+      final payload = request.context['authPayload'] as Map<String, dynamic>?;
+      if (payload == null || payload['userId'] == null) {
+        return Response.forbidden(jsonEncode({'message': 'Unauthorized'}));
+      }
+
+      final dynamic userId = payload['userId'];
+      final String? deckIdStr = request.params['id'];
+      
+      if (deckIdStr == null) {
+        return Response.badRequest(body: jsonEncode({'message': 'Missing deck ID'}));
+      }
+
+      final int deckId = int.parse(deckIdStr);
+      await _deckService.saveDeckToLibrary(deckId, userId);
+
+      return Response.ok(
+        jsonEncode({
+          "success": true,
+          "message": "Đã lưu bộ đề vào thư viện cá nhân thành công!"
+        }),
+        headers: {'content-type': 'application/json'},
+      );
+    } catch (e) {
+      final message = e.toString().contains('Exception: ') 
+          ? e.toString().split('Exception: ')[1] 
+          : e.toString();
+
+      return Response(400,
+        body: jsonEncode({"success": false, "message": message}),
+        headers: {'content-type': 'application/json'},
+      );
+    }
+  }
+
+  Future<Response> unsaveDeck(Request request) async {
+    try {
+      final payload = request.context['authPayload'] as Map<String, dynamic>?;
+      if (payload == null || payload['userId'] == null) {
+        return Response.forbidden(jsonEncode({'message': 'Unauthorized'}));
+      }
+
+      final dynamic userId = payload['userId'];
+      final String? deckIdStr = request.params['id'];
+      
+      if (deckIdStr == null) {
+        return Response.badRequest(body: jsonEncode({'message': 'Missing deck ID'}));
+      }
+
+      final int deckId = int.parse(deckIdStr);
+      await _deckService.unsaveDeck(deckId, userId);
+
+      return Response.ok(
+        jsonEncode({
+          "success": true,
+          "message": "Đã gỡ bộ đề khỏi thư viện thành công!"
+        }),
+        headers: {'content-type': 'application/json'},
+      );
+    } catch (e) {
+      final message = e.toString().contains('Exception: ') 
+          ? e.toString().split('Exception: ')[1] 
+          : e.toString();
+
+      return Response(400,
         body: jsonEncode({"success": false, "message": message}),
         headers: {'content-type': 'application/json'},
       );

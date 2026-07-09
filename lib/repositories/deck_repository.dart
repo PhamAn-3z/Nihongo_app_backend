@@ -127,6 +127,67 @@ class DeckRepository {
     }
   }
 
+  Future<List<Map<String, dynamic>>> getExploreDecks({
+    String? searchTerm,
+    int page = 1,
+    int limit = 10,
+    String sortBy = 'created_at',
+    bool ascending = false,
+    int? currentUserId,
+  }) async {
+    var query = _client
+        .from('decks')
+        .select('''
+          deck_id,
+          title,
+          created_at,
+          public_status,
+          user_id,
+          author:users!decks_user_id_fkey (
+            username,
+            user_profiles (avatar_url)
+          ),
+          positions (
+            position_id,
+            users_positions (
+              user_id,
+              status,
+              next_review
+            )
+          ),
+          user_decks (
+            user_id,
+            is_favorite
+          ),
+          total_views:flashcard_study_logs(count),
+          flashcard_study_logs (
+            studied_at
+          )
+        ''')
+        .eq('public_status', 'public');
+
+    if (searchTerm != null && searchTerm.trim().isNotEmpty) {
+      query = query.ilike('title', '%$searchTerm%');
+    }
+
+    // Các trường có sẵn trong bảng decks để sắp xếp tại DB
+    final dbSortableFields = ['created_at', 'title'];
+    final isDbSorting = dbSortableFields.contains(sortBy);
+
+    if (isDbSorting) {
+      final int from = (page - 1) * limit;
+      final int to = from + limit - 1;
+      final response = await query
+          .order(sortBy, ascending: ascending)
+          .range(from, to);
+      return List<Map<String, dynamic>>.from(response as List);
+    } else {
+      // Nếu sắp xếp theo stats (views, favorites...), ta lấy hết về để Service xử lý
+      final response = await query;
+      return List<Map<String, dynamic>>.from(response as List);
+    }
+  }
+
   Future<List<dynamic>> getAllDecks() async {
     return await _client.from('decks').select();
   }
@@ -213,6 +274,103 @@ class DeckRepository {
     if ((response as List).isEmpty) {
       throw Exception('Không tìm thấy bộ đề hoặc bạn không có quyền xóa bộ đề này.');
     }
+  }
+
+  Future<List<Map<String, dynamic>>> getRecentlyViewedDecks(int userId, {int limit = 10}) async {
+    // Truy vấn nhật ký học tập, lấy thông tin bộ đề kèm theo và các thông số học tập
+    final response = await _client
+        .from('flashcard_study_logs')
+        .select('''
+          studied_at,
+          cards_learned,
+          cards_reviewed,
+          duration_seconds,
+          decks (
+            deck_id,
+            title,
+            public_status,
+            author:users!decks_user_id_fkey (
+              username,
+              user_profiles (avatar_url)
+            ),
+            positions (
+              position_id,
+              users_positions (
+                user_id,
+                status,
+                next_review
+              )
+            ),
+            user_decks (
+              user_id,
+              is_favorite
+            )
+          )
+        ''')
+        .eq('user_id', userId)
+        .order('studied_at', ascending: false)
+        .limit(limit * 3);
+
+    return List<Map<String, dynamic>>.from(response as List);
+  }
+
+  Future<void> saveDeckToLibrary(int userId, int deckId) async {
+    // 1. Kiểm tra xem bộ đề có tồn tại và hợp lệ không
+    final deck = await _client
+        .from('decks')
+        .select('public_status, user_id')
+        .eq('deck_id', deckId)
+        .maybeSingle();
+
+    if (deck == null) {
+      throw Exception('Bộ đề không tồn tại!');
+    }
+    
+    if (deck['user_id'] != userId && deck['public_status'] != 'public') {
+      throw Exception('Bạn không thể lưu bộ đề riêng tư của người khác!');
+    }
+
+    // 2. Kiểm tra xem đã lưu chưa
+    final existing = await _client
+        .from('user_decks')
+        .select()
+        .eq('user_id', userId)
+        .eq('deck_id', deckId)
+        .maybeSingle();
+
+    if (existing != null) {
+      throw Exception('Bộ đề này đã có trong thư viện của bạn rồi!');
+    }
+
+    // 3. Chỉ cần Insert vào user_decks (Lazy Initialization)
+    // Các dữ liệu users_groups và users_positions sẽ được tạo khi người dùng 
+    // thực sự học hoặc tùy chỉnh bộ đề.
+    await _client.from('user_decks').insert({
+      'user_id': userId,
+      'deck_id': deckId,
+      'is_favorite': false,
+      'last_studied_at': DateTime.now().toIso8601String(),
+    });
+  }
+
+  Future<void> unsaveDeck(int userId, int deckId) async {
+    // 1. Kiểm tra xem có phải chủ sở hữu không
+    final deck = await _client
+        .from('decks')
+        .select('user_id')
+        .eq('deck_id', deckId)
+        .maybeSingle();
+
+    if (deck != null && deck['user_id'] == userId) {
+      throw Exception('Bạn là chủ sở hữu bộ đề này. Để gỡ bỏ khỏi thư viện, bạn phải dùng chức năng Xóa vĩnh viễn.');
+    }
+
+    // 2. Xóa khỏi thư viện (user_decks)
+    await _client
+        .from('user_decks')
+        .delete()
+        .eq('user_id', userId)
+        .eq('deck_id', deckId);
   }
 
   Future<void> updateFavoriteStatus(int deckId, int userId, bool isFavorite) async {

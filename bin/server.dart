@@ -162,6 +162,11 @@ void main() async {
       .addMiddleware((Handler innerHandler) {
     return (Request request) {
       final path = request.url.path;
+      // Cho phép truy cập công khai vào API explore mà không cần token
+      if (path == 'api/v1/decks/explore') {
+        return innerHandler(request);
+      }
+
       if (path.startsWith('api/v1/profile') ||
           path.startsWith('api/v1/stats') ||
           path.startsWith('api/v1/receipts')||

@@ -11,14 +11,26 @@ Router deckRoutes(DeckController controller) {
   // Lấy danh sách bộ đề
   router.get('/', controller.getAllDecks);
 
+  // Lấy danh sách bộ đề công khai (Khám phá)
+  router.get('/explore', controller.getExploreDecks);
+
   // Lấy danh sách bộ đề của user (dạng cây)
   router.get('/my-decks', controller.getUserDecksTree);
+
+  // Lấy danh sách bộ đề đã học gần đây
+  router.get('/recent', controller.getRecentlyViewedDecks);
 
   // Lấy dữ liệu học tập của một bộ đề cụ thể
   router.get('/<id>/study', controller.getDeckStudyData);
 
   // Xóa bộ đề vĩnh viễn
   router.delete('/<id>', controller.deleteDeck);
+
+  // Lưu bộ đề của người khác vào thư viện
+  router.post('/<id>/save', controller.saveDeck);
+
+  // Gỡ bộ đề khỏi thư viện
+  router.delete('/<id>/unsave', controller.unsaveDeck);
 
   // Toggle Favorite (Bật/Tắt yêu thích)
   router.patch('/<id>/toggle-favorite', controller.toggleFavorite);
