@@ -17,6 +17,7 @@ import 'package:flashcard_quiz_backend/repositories/email_verification_repositor
 import 'package:flashcard_quiz_backend/repositories/deck_repository.dart';
 import 'package:flashcard_quiz_backend/repositories/study_log_repository.dart';
 import 'package:flashcard_quiz_backend/repositories/notification_repository.dart';
+import 'package:flashcard_quiz_backend/repositories/translation_repository.dart';
 
 // Services
 import 'package:flashcard_quiz_backend/services/auth_service.dart';
@@ -31,6 +32,8 @@ import 'package:flashcard_quiz_backend/services/notification_service.dart';
 import 'package:flashcard_quiz_backend/services/study_log_service.dart';
 import 'package:flashcard_quiz_backend/services/r2_service.dart';
 import 'package:flashcard_quiz_backend/services/cloudinary_service.dart';
+import 'package:flashcard_quiz_backend/services/gemini_service.dart';
+import 'package:flashcard_quiz_backend/services/translation_service.dart';
 
 // Controllers
 import 'package:flashcard_quiz_backend/controllers/auth_controller.dart';
@@ -45,6 +48,7 @@ import 'package:flashcard_quiz_backend/controllers/notification_controller.dart'
 import 'package:flashcard_quiz_backend/controllers/study_log_controller.dart';
 import 'package:flashcard_quiz_backend/controllers/audio_controller.dart';
 import 'package:flashcard_quiz_backend/controllers/image_controller.dart';
+import 'package:flashcard_quiz_backend/controllers/translation_controller.dart';
 
 // Routes
 import 'package:flashcard_quiz_backend/routes/auth_routes.dart';
@@ -60,6 +64,7 @@ import 'package:flashcard_quiz_backend/routes/notification_routes.dart';
 import 'package:flashcard_quiz_backend/routes/study_log_routes.dart';
 import 'package:flashcard_quiz_backend/routes/audio_routes.dart';
 import 'package:flashcard_quiz_backend/routes/image_routes.dart';
+import 'package:flashcard_quiz_backend/routes/translation_routes.dart';
 
 import 'package:flashcard_quiz_backend/middlewares/auth_middleware.dart';
 import 'package:flashcard_quiz_backend/middlewares/cors_middleware.dart';
@@ -83,6 +88,10 @@ void main() async {
   final String smtpPassword = env['SMTP_PASSWORD'] ?? '';
   final emailService = EmailService(smtpEmail, smtpPassword);
 
+  // Gemini Config
+  final String geminiApiKey = env['GEMINI_API_KEY'] ?? '';
+  final geminiService = GeminiService(geminiApiKey);
+
   // Repositories
   final userRepository = UserRepository(supabaseClient);
   final userStatsRepository = UserStatsRepository(supabaseClient);
@@ -93,6 +102,7 @@ void main() async {
   final deckRepository = DeckRepository(supabaseClient);
   final studyLogRepo = StudyLogRepository(supabaseClient);
   final notificationRepository = NotificationRepository(supabaseClient);
+  final translationRepository = TranslationRepository(supabaseClient);
 
   // Services
   final authService = AuthService(
@@ -114,6 +124,7 @@ void main() async {
   final deckService = DeckService(deckRepository);
   final studyLogService = StudyLogService(studyLogRepo);
   final notificationService = NotificationService(notificationRepository);
+  final translationService = TranslationService(translationRepository, geminiService);
 
   // Audio/R2 Config
   final r2Service = R2Service(
@@ -144,6 +155,7 @@ void main() async {
   final notificationController = NotificationController(notificationService);
   final audioController = AudioController(r2Service);
   final imageController = ImageController(cloudinaryService);
+  final translationController = TranslationController(translationService);
 
   // Background Cleanup Task
   Timer.periodic(Duration(minutes: 30), (timer) async {
@@ -170,6 +182,7 @@ void main() async {
   router.mount('/api/v1/study-logs', studyLogRoutes(studyLogController));
   router.mount('/api/v1/audio', audioRoutes(audioController));
   router.mount('/api/v1/images', imageRoutes(imageController));
+  router.mount('/api/v1/translate', translationRoutes(translationController));
 
   router.get('/api/v1/user/profile', (Request request) {
     return Response.ok(
@@ -204,6 +217,7 @@ void main() async {
           path.contains('api/v1/images') ||
           path.contains('api/v1/notifications') ||
           path.contains('api/v1/study-logs') ||
+          path.contains('api/v1/translate') ||
           path.endsWith('auth/logout')) {
         return authMiddleware()(innerHandler)(request);
       }
