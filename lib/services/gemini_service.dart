@@ -69,6 +69,9 @@ $text
         print('[Gemini Error] No candidates returned');
         throw Exception('Gemini API returned no candidates.');
       }
+    } else if (response.statusCode == 503) {
+      print('[Gemini Error] 503 - High Demand');
+      throw Exception('Hệ thống đang quá tải - xin hãy thử lại sau giây lát.');
     } else {
       print('[Gemini Error] Status: ${response.statusCode}, Body: ${response.body}');
       throw Exception('Gemini API Error: ${response.body}');

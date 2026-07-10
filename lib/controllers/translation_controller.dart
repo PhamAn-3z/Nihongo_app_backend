@@ -38,7 +38,6 @@ class TranslationController {
         );
       }
 
-      // Supported languages mapping
       const supportedLangs = ['ja', 'vi'];
       if (!supportedLangs.contains(sourceLang) || !supportedLangs.contains(targetLang)) {
         return Response.badRequest(
@@ -63,13 +62,16 @@ class TranslationController {
         }),
         headers: {'Content-Type': 'application/json'},
       );
-    } catch (e, stackTrace) {
-      print('Translation Error: $e');
-      print(stackTrace);
-
-      return Response.internalServerError(
+    } catch (e) {
+      final errorMsg = e.toString().replaceAll('Exception: ', '');
+      
+      // Kiểm tra nếu là lỗi quá tải từ Gemini
+      final isOverloaded = errorMsg.contains('quá tải');
+      
+      return Response(
+        isOverloaded ? 503 : 500,
         body: jsonEncode({
-          'message': e.toString().replaceAll('Exception: ', ''),
+          'message': errorMsg,
         }),
         headers: {'Content-Type': 'application/json'},
       );
