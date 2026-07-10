@@ -63,6 +63,8 @@ import 'package:flashcard_quiz_backend/services/fcm_service.dart';
 import 'package:flashcard_quiz_backend/middlewares/auth_middleware.dart';
 import 'package:flashcard_quiz_backend/middlewares/cors_middleware.dart';
 
+import 'package:flashcard_quiz_backend/services/cron_service.dart';
+
 void main() async {
   // Tải biến môi trường từ file .env
   final env = DotEnv(includePlatformEnvironment: true)..load();
@@ -135,6 +137,10 @@ void main() async {
       print('❌ Cleanup error: $e');
     }
   });
+
+  // Khởi động CronService nhắc nhở hết hạn
+  final cronService = CronService(supabaseClient, notificationService);
+  cronService.start();
 
   // 3. Khởi tạo Router chính
   final router = Router();
