@@ -89,10 +89,17 @@ class DeckRepository {
         // Tạo terms cho từng group trong row
         groupMap.forEach((key, groupId) {
           if (rowData.containsKey(key)) {
+            final dynamic val = rowData[key];
+            // Nếu dữ liệu truyền vào đã là Map (có cấu trúc text, audio, image) thì lưu luôn
+            // Nếu là String/khác thì bọc vào trường 'text' để chuẩn hóa
+            final Map<String, dynamic> content = (val is Map<String, dynamic>) 
+                ? val 
+                : {'text': val.toString()};
+
             termsToInsert.add({
               'group_id': groupId,
               'position_id': positionId,
-              'content': {'text': rowData[key].toString()},
+              'content': content,
             });
           }
         });

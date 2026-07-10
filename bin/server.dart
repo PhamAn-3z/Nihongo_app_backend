@@ -29,6 +29,8 @@ import 'package:flashcard_quiz_backend/services/vnpay_service.dart';
 import 'package:flashcard_quiz_backend/services/deck_service.dart';
 import 'package:flashcard_quiz_backend/services/notification_service.dart';
 import 'package:flashcard_quiz_backend/services/study_log_service.dart';
+import 'package:flashcard_quiz_backend/services/r2_service.dart';
+import 'package:flashcard_quiz_backend/services/cloudinary_service.dart';
 
 // Controllers
 import 'package:flashcard_quiz_backend/controllers/auth_controller.dart';
@@ -41,6 +43,8 @@ import 'package:flashcard_quiz_backend/controllers/vnpay_controller.dart';
 import 'package:flashcard_quiz_backend/controllers/deck_controller.dart';
 import 'package:flashcard_quiz_backend/controllers/notification_controller.dart';
 import 'package:flashcard_quiz_backend/controllers/study_log_controller.dart';
+import 'package:flashcard_quiz_backend/controllers/audio_controller.dart';
+import 'package:flashcard_quiz_backend/controllers/image_controller.dart';
 
 // Routes
 import 'package:flashcard_quiz_backend/routes/auth_routes.dart';
@@ -54,6 +58,8 @@ import 'package:flashcard_quiz_backend/routes/deck_routes.dart';
 import 'package:flashcard_quiz_backend/routes/comment_routes.dart';
 import 'package:flashcard_quiz_backend/routes/notification_routes.dart';
 import 'package:flashcard_quiz_backend/routes/study_log_routes.dart';
+import 'package:flashcard_quiz_backend/routes/audio_routes.dart';
+import 'package:flashcard_quiz_backend/routes/image_routes.dart';
 
 import 'package:flashcard_quiz_backend/middlewares/auth_middleware.dart';
 import 'package:flashcard_quiz_backend/middlewares/cors_middleware.dart';
@@ -109,6 +115,22 @@ void main() async {
   final studyLogService = StudyLogService(studyLogRepo);
   final notificationService = NotificationService(notificationRepository);
 
+  // Audio/R2 Config
+  final r2Service = R2Service(
+    accessKey: env['R2_ACCESS_KEY_ID']?.trim() ?? '',
+    secretKey: env['R2_SECRET_ACCESS_KEY']?.trim() ?? '',
+    endpoint: env['R2_ENDPOINT']?.trim() ?? '',
+    bucketName: env['R2_BUCKET_NAME']?.trim() ?? '',
+    publicDomain: env['R2_PUBLIC_DOMAIN']?.trim() ?? '',
+  );
+
+  final cloudinaryService = CloudinaryService(
+    cloudName: env['CLOUDINARY_CLOUD_NAME']?.trim() ?? '',
+    apiKey: env['CLOUDINARY_API_KEY']?.trim() ?? '',
+    apiSecret: env['CLOUDINARY_API_SECRET']?.trim() ?? '',
+    uploadPreset: env['CLOUDINARY_UPLOAD_PRESET']?.trim() ?? 'ml_default',
+  );
+
   // Controllers
   final authController = AuthController(authService);
   final userController = UserController(userRepository);
@@ -120,6 +142,8 @@ void main() async {
   final deckController = DeckController(deckService);
   final studyLogController = StudyLogController(studyLogService);
   final notificationController = NotificationController(notificationService);
+  final audioController = AudioController(r2Service);
+  final imageController = ImageController(cloudinaryService);
 
   // Background Cleanup Task
   Timer.periodic(Duration(minutes: 30), (timer) async {
@@ -144,6 +168,8 @@ void main() async {
   router.mount('/api/v1/comments', commentRoutes(deckController));
   router.mount('/api/v1/notifications', notificationRoutes(notificationController));
   router.mount('/api/v1/study-logs', studyLogRoutes(studyLogController));
+  router.mount('/api/v1/audio', audioRoutes(audioController));
+  router.mount('/api/v1/images', imageRoutes(imageController));
 
   router.get('/api/v1/user/profile', (Request request) {
     return Response.ok(
@@ -174,6 +200,8 @@ void main() async {
           path.contains('api/v1/decks') ||
           path.contains('api/v1/comments') ||
           path.contains('api/v1/user') ||
+          path.contains('api/v1/audio') ||
+          path.contains('api/v1/images') ||
           path.contains('api/v1/notifications') ||
           path.contains('api/v1/study-logs') ||
           path.endsWith('auth/logout')) {
