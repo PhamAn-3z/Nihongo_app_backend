@@ -11,5 +11,9 @@ Router notificationRoutes(NotificationController controller) {
   router.put('/read-all', controller.markAllAsRead);
   router.delete('/<id>', controller.delete);
 
+  // FCM Token endpoints
+  router.post('/fcm-token', controller.registerFcmToken);
+  router.delete('/fcm-token', controller.deleteFcmToken);
+
   return router;
 }

@@ -52,6 +52,9 @@ import 'package:flashcard_quiz_backend/services/notification_service.dart';
 import 'package:flashcard_quiz_backend/controllers/notification_controller.dart';
 import 'package:flashcard_quiz_backend/routes/notification_routes.dart';
 
+import 'package:flashcard_quiz_backend/repositories/fcm_token_repository.dart';
+import 'package:flashcard_quiz_backend/services/fcm_service.dart';
+
 import 'package:flashcard_quiz_backend/middlewares/auth_middleware.dart';
 import 'package:flashcard_quiz_backend/middlewares/cors_middleware.dart';
 
@@ -62,6 +65,7 @@ void main() async {
   // 1. Cấu hình kết nối Supabase
   final String supabaseUrl = env['SUPABASE_URL'] ?? '';
   final String supabaseKey = env['SUPABASE_KEY'] ?? '';
+  final String fcmServiceAccountPath = env['FIREBASE_SERVICE_ACCOUNT_PATH'] ?? 'firebase-service-account.json';
 
   if (supabaseUrl.isEmpty || supabaseKey.isEmpty) {
     print('From sever.dart:  Lỗi: Chưa cấu hình SUPABASE_URL hoặc SUPABASE_KEY trong file .env. Hãy lấy key trong zalo');
@@ -107,8 +111,10 @@ void main() async {
   final deckController = DeckController(deckService);
 
   // Notification Layer
+  final fcmTokenRepository = FcmTokenRepository(supabaseClient);
+  final fcmService = FcmService(fcmServiceAccountPath);
   final notificationRepository = NotificationRepository(supabaseClient);
-  final notificationService = NotificationService(notificationRepository);
+  final notificationService = NotificationService(notificationRepository, fcmTokenRepository, fcmService);
   final notificationController = NotificationController(notificationService);
 
   // 2.1 Start Background Cleanup Task (Every 5 minutes)
