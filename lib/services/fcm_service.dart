@@ -10,7 +10,7 @@ class FcmService {
   FcmService(this._serviceAccountPath);
 
   Future<AutoRefreshingAuthClient> _getClient() async {
-    if (_client != null && _client!.credentials.expiry.isAfter(DateTime.now().add(Duration(minutes: 5)))) {
+    if (_client != null && _client!.credentials.accessToken.expiry.isAfter(DateTime.now().add(Duration(minutes: 5)))) {
       return _client!;
     }
 
