@@ -52,6 +52,11 @@ import 'package:flashcard_quiz_backend/services/notification_service.dart';
 import 'package:flashcard_quiz_backend/controllers/notification_controller.dart';
 import 'package:flashcard_quiz_backend/routes/notification_routes.dart';
 
+import 'package:flashcard_quiz_backend/repositories/notification_settings_repository.dart';
+import 'package:flashcard_quiz_backend/services/notification_settings_service.dart';
+import 'package:flashcard_quiz_backend/controllers/notification_settings_controller.dart';
+import 'package:flashcard_quiz_backend/routes/notification_settings_routes.dart';
+
 import 'package:flashcard_quiz_backend/repositories/fcm_token_repository.dart';
 import 'package:flashcard_quiz_backend/services/fcm_service.dart';
 
@@ -117,6 +122,10 @@ void main() async {
   final notificationService = NotificationService(notificationRepository, fcmTokenRepository, fcmService);
   final notificationController = NotificationController(notificationService);
 
+  final notificationSettingsRepository = NotificationSettingsRepository(supabaseClient);
+  final notificationSettingsService = NotificationSettingsService(notificationSettingsRepository);
+  final notificationSettingsController = NotificationSettingsController(notificationSettingsService);
+
   // 2.1 Start Background Cleanup Task (Every 5 minutes)
   Timer.periodic(Duration(minutes: 30), (timer) async {
     print('🧹 [${DateTime.now()}] Running background cleanup: Deleting expired unpaid receipts...');
@@ -141,6 +150,7 @@ void main() async {
   router.mount('/api/v1/decks', deckRoutes(deckController));
   router.mount('/api/v1/comments', commentRoutes(deckController));
   router.mount('/api/v1/notifications', notificationRoutes(notificationController));
+  router.mount('/api/v1/notification-settings', notificationSettingsRoutes(notificationSettingsController));
 
   // 5. Route được bảo vệ (Yêu cầu JWT Token)
   router.get('/api/v1/user/profile', (Request request) {
@@ -165,6 +175,7 @@ void main() async {
             path.contains('api/v1/comments') ||
             path.contains('api/v1/user') ||
             path.contains('api/v1/notifications') ||
+            path.contains('api/v1/notification-settings') ||
             path.endsWith('auth/logout');
 
         // Riêng với /decks, ta yêu cầu auth trừ các endpoint công khai
