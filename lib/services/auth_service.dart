@@ -35,12 +35,11 @@ class AuthService {
     if (userId != null) {
       await userStatsRepository.createUserStats({
         'user_id': int.parse(userId.toString()),
-        'current_streak': null,
-        'max_streak': null,
-        'total_exp': null,
-        'membership_id': 6,
-        'is_active': null,
-        'isActive': null,
+        'current_streak': 0,
+        'max_streak': 0,
+        'total_exp': 0,
+        'membership_id': 1,
+        'is_active': true,
         'last_study_date': null,
         'membership_expired_date': null,
       });

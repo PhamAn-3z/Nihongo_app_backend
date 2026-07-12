@@ -13,6 +13,12 @@ class UserStatsService {
     // Prevent updating user_id
     updates.remove('user_id');
     
+    // Handle isActive/is_active mapping to ensure consistency
+    if (updates.containsKey('isActive')) {
+      updates['is_active'] = updates['isActive'];
+      updates.remove('isActive');
+    }
+    
     return await userStatsRepository.updateStats(userId, updates);
   }
 
@@ -23,7 +29,7 @@ class UserStatsService {
       'max_streak': 0,
       'total_exp': 0,
       'membership_id': 1,
-      'isActive': true,
+      'is_active': true,
       'last_study_date': null,
       'membership_expired_date': null,
     });
