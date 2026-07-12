@@ -18,6 +18,15 @@ class ReceiptController {
     }
   }
 
+  Future<Response> getAll(Request request) async {
+    try {
+      final receipts = await receiptService.getAll();
+      return Response.ok(jsonEncode({'status': 'success', 'data': receipts}), headers: {'Content-Type': 'application/json'});
+    } catch (e) {
+      return Response.internalServerError(body: jsonEncode({'status': 'error', 'message': e.toString()}), headers: {'Content-Type': 'application/json'});
+    }
+  }
+
   Future<Response> getMyReceipts(Request request) async {
     try {
       final payload = request.context['authPayload'] as Map<String, dynamic>?;

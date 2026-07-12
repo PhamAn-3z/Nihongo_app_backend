@@ -3,6 +3,7 @@ import '../controllers/receipt_controller.dart';
 
 Router receiptRoutes(ReceiptController controller) {
   final router = Router();
+  router.get('/', controller.getAll);
   router.get('/my', controller.getMyReceipts);
   router.get('/user/<userId>', controller.getByUserId);
   router.post('/', controller.create);
