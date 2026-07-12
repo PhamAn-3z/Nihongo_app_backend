@@ -1,8 +1,9 @@
 import 'dart:convert';
 import 'package:shelf/shelf.dart';
 import '../services/jwt_service.dart';
+import '../services/moderation_service.dart';
 
-Middleware authMiddleware() {
+Middleware authMiddleware(ModerationService moderationService) {
   return (Handler innerHandler) {
     return (Request request) async {
       final authHeader = request.headers['Authorization'];
@@ -17,14 +18,25 @@ Middleware authMiddleware() {
       try {
         final token = authHeader.replaceFirst('Bearer ', '');
         final jwt = JwtService.verifyToken(token);
+        final payload = jwt.payload as Map<String, dynamic>;
+        final userId = int.parse(payload['userId'].toString());
 
-        // Lưu thông tin từ JWT vào context của request để Controller có thể sử dụng
-        final updatedRequest = request.change(context: {'authPayload': jwt.payload});
+        // --- KIỂM TRA TRẠNG THÁI BAN REAL-TIME ---
+        final banMessage = await moderationService.checkUserAccess(userId);
+        if (banMessage != null) {
+          return Response(
+            403,
+            body: jsonEncode({'message': banMessage}),
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        // ------------------------------------------
 
+        final updatedRequest = request.change(context: {'authPayload': payload});
         return await innerHandler(updatedRequest);
       } catch (e) {
         return Response.forbidden(
-          jsonEncode({'message': 'Invalid token'}),
+          jsonEncode({'message': 'Invalid or expired token'}),
           headers: {'content-type': 'application/json'},
         );
       }

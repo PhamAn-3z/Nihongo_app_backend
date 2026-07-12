@@ -3,6 +3,7 @@ import '../repositories/user_stats_repository.dart';
 import '../repositories/email_verification_repository.dart';
 import '../services/jwt_service.dart';
 import '../services/email_service.dart';
+import '../services/moderation_service.dart';
 import '../utils/password_utils.dart';
 import '../utils/otp_utils.dart';
 
@@ -11,12 +12,14 @@ class AuthService {
   final UserStatsRepository userStatsRepository;
   final EmailVerificationRepository emailVerificationRepository;
   final EmailService emailService;
+  final ModerationService moderationService; // Thêm ModerationService
 
   AuthService({
     required this.userRepository,
     required this.userStatsRepository,
     required this.emailVerificationRepository,
     required this.emailService,
+    required this.moderationService,
   });
 
   Future<Map<String, dynamic>?> register({
@@ -24,28 +27,25 @@ class AuthService {
     required String password,
     required String username,
   }) async {
-    // 1. Kiểm tra xem email đã tồn tại chưa
     final existingUserByEmail = await userRepository.findByEmail(email);
     if (existingUserByEmail != null) {
       throw Exception('Email already exists');
     }
 
-    // 2. Kiểm tra xem username đã tồn tại chưa
     final existingUserByUsername = await userRepository.findByUsername(username);
     if (existingUserByUsername != null) {
       throw Exception('Username already exists');
     }
 
-    // 3. Mã hóa mật khẩu
     final hashedPassword = PasswordUtils.hashPassword(password);
 
-    // 4. Lưu user vào DB
     final newUser = await userRepository.createUser({
       'email': email,
       'password_hash': hashedPassword,
       'username': username,
       'created_at': DateTime.now().toIso8601String(),
       'email_verified': false,
+      'status': 'active', // Mặc định là active
     });
 
     final userId = newUser?['user_id'];
@@ -53,7 +53,6 @@ class AuthService {
 
     final intUserId = int.parse(userId.toString());
 
-    // 5. Khởi tạo User Stats
     await userStatsRepository.createUserStats({
       'user_id': intUserId,
       'current_streak': 0,
@@ -65,18 +64,15 @@ class AuthService {
       'membership_expired_date': null,
     });
 
-    // 6. Tạo mã OTP
     final otp = OtpUtils.generateOtp();
     final expiresAt = DateTime.now().add(const Duration(minutes: 5));
 
-    // 7. Lưu OTP vào bảng email_verifications
     await emailVerificationRepository.createVerification(
       userId: intUserId,
       otpCode: otp,
       expiresAt: expiresAt,
     );
 
-    // 8. Gửi email OTP
     try {
       await emailService.sendVerificationOtp(email, otp);
     } catch (e) {
@@ -96,16 +92,23 @@ class AuthService {
       return null;
     }
 
-    // Kiểm tra xem đã xác thực email chưa
     if (user['email_verified'] == false) {
       throw Exception('Please verify your email first');
     }
 
     final hashedPassword = PasswordUtils.hashPassword(password);
-
     if (hashedPassword != user['password_hash']) {
       return null;
     }
+
+    final userId = int.parse(user['user_id'].toString());
+
+    // --- KIỂM TRA TRẠNG THÁI BAN ---
+    final banMessage = await moderationService.checkUserAccess(userId);
+    if (banMessage != null) {
+      throw Exception(banMessage);
+    }
+    // -------------------------------
 
     final token = JwtService.generateToken(
       userId: user['user_id'].toString(),

@@ -18,6 +18,7 @@ import 'package:flashcard_quiz_backend/repositories/deck_repository.dart';
 import 'package:flashcard_quiz_backend/repositories/study_log_repository.dart';
 import 'package:flashcard_quiz_backend/repositories/notification_repository.dart';
 import 'package:flashcard_quiz_backend/repositories/translation_repository.dart';
+import 'package:flashcard_quiz_backend/repositories/moderation_repository.dart';
 
 // Services
 import 'package:flashcard_quiz_backend/services/auth_service.dart';
@@ -34,6 +35,7 @@ import 'package:flashcard_quiz_backend/services/r2_service.dart';
 import 'package:flashcard_quiz_backend/services/cloudinary_service.dart';
 import 'package:flashcard_quiz_backend/services/gemini_service.dart';
 import 'package:flashcard_quiz_backend/services/translation_service.dart';
+import 'package:flashcard_quiz_backend/services/moderation_service.dart';
 
 // Controllers
 import 'package:flashcard_quiz_backend/controllers/auth_controller.dart';
@@ -49,6 +51,7 @@ import 'package:flashcard_quiz_backend/controllers/study_log_controller.dart';
 import 'package:flashcard_quiz_backend/controllers/audio_controller.dart';
 import 'package:flashcard_quiz_backend/controllers/image_controller.dart';
 import 'package:flashcard_quiz_backend/controllers/translation_controller.dart';
+import 'package:flashcard_quiz_backend/controllers/admin_moderation_controller.dart';
 
 // Routes
 import 'package:flashcard_quiz_backend/routes/auth_routes.dart';
@@ -65,6 +68,7 @@ import 'package:flashcard_quiz_backend/routes/study_log_routes.dart';
 import 'package:flashcard_quiz_backend/routes/audio_routes.dart';
 import 'package:flashcard_quiz_backend/routes/image_routes.dart';
 import 'package:flashcard_quiz_backend/routes/translation_routes.dart';
+import 'package:flashcard_quiz_backend/routes/admin_moderation_routes.dart';
 
 import 'package:flashcard_quiz_backend/middlewares/auth_middleware.dart';
 import 'package:flashcard_quiz_backend/middlewares/cors_middleware.dart';
@@ -96,6 +100,7 @@ void main() async {
   final userRepository = UserRepository(supabaseClient);
   final userStatsRepository = UserStatsRepository(supabaseClient);
   final emailVerificationRepository = EmailVerificationRepository(supabaseClient);
+  final moderationRepository = ModerationRepository(supabaseClient);
   final membershipRepository = MembershipRepository(supabaseClient);
   final promoCodeRepository = PromoCodeRepository(supabaseClient);
   final receiptRepository = ReceiptRepository(supabaseClient);
@@ -105,11 +110,14 @@ void main() async {
   final translationRepository = TranslationRepository(supabaseClient);
 
   // Services
+  final notificationService = NotificationService(notificationRepository);
+  final moderationService = ModerationService(moderationRepository, userRepository, notificationService);
   final authService = AuthService(
     userRepository: userRepository,
     userStatsRepository: userStatsRepository,
     emailVerificationRepository: emailVerificationRepository,
     emailService: emailService,
+    moderationService: moderationService,
   );
   final membershipService = MembershipService(membershipRepository);
   final promoCodeService = PromoCodeService(promoCodeRepository);
@@ -123,7 +131,6 @@ void main() async {
   final vnpayService = VnPayService();
   final deckService = DeckService(deckRepository);
   final studyLogService = StudyLogService(studyLogRepo);
-  final notificationService = NotificationService(notificationRepository);
   final translationService = TranslationService(translationRepository, geminiService);
 
   // Audio/R2 Config
@@ -145,6 +152,7 @@ void main() async {
   // Controllers
   final authController = AuthController(authService);
   final userController = UserController(userRepository);
+  final moderationController = AdminModerationController(moderationService, userRepository);
   final membershipController = MembershipController(membershipService);
   final promoCodeController = PromoCodeController(promoCodeService);
   final receiptController = ReceiptController(receiptService);
@@ -171,6 +179,7 @@ void main() async {
 
   router.mount('/api/v1/auth', authRoutes(authController));
   router.mount('/api/v1/user/', userRoutes(userController));
+  router.mount('/api/v1/admin', adminModerationRoutes(moderationController));
   router.mount('/api/v1/memberships', membershipRoutes(membershipController));
   router.mount('/api/v1/promo-codes', promoCodeRoutes(promoCodeController));
   router.mount('/api/v1/receipts', receiptRoutes(receiptController));
@@ -210,6 +219,7 @@ void main() async {
       if (path.startsWith('api/v1/profile') ||
           path.startsWith('api/v1/stats') ||
           path.startsWith('api/v1/receipts')||
+          path.contains('api/v1/admin') ||
           path.contains('api/v1/decks') ||
           path.contains('api/v1/comments') ||
           path.contains('api/v1/user') ||
@@ -219,7 +229,7 @@ void main() async {
           path.contains('api/v1/study-logs') ||
           path.contains('api/v1/translate') ||
           path.endsWith('auth/logout')) {
-        return authMiddleware()(innerHandler)(request);
+        return authMiddleware(moderationService)(innerHandler)(request);
       }
 
       return innerHandler(request);

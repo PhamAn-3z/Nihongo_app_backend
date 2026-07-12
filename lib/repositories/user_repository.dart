@@ -51,4 +51,12 @@ class UserRepository {
         .update({'email_verified': true})
         .eq('user_id', userId);
   }
+
+  // Cập nhật trạng thái (active, warned, temporarily_banned, permanently_banned)
+  Future<void> updateStatus(int userId, String status) async {
+    await supabase
+        .from('users')
+        .update({'status': status})
+        .eq('user_id', userId);
+  }
 }
