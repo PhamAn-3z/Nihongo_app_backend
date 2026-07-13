@@ -489,4 +489,29 @@ class DeckController {
       );
     }
   }
+
+  Future<Response> getMembershipLimit(Request request) async {
+    try {
+      final payload = request.context['authPayload'] as Map<String, dynamic>?;
+      if (payload == null || payload['userId'] == null) {
+        return Response.forbidden(jsonEncode({'message': 'Unauthorized'}));
+      }
+
+      final dynamic userId = payload['userId'];
+      final limitData = await _deckService.getUserMembershipLimit(userId);
+
+      return Response.ok(
+        jsonEncode({
+          "success": true,
+          "data": limitData
+        }),
+        headers: {'content-type': 'application/json'},
+      );
+    } catch (e) {
+      return Response.internalServerError(
+        body: jsonEncode({"success": false, "message": e.toString()}),
+        headers: {'content-type': 'application/json'},
+      );
+    }
+  }
 }

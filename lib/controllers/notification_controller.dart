@@ -154,4 +154,69 @@ class NotificationController {
       );
     }
   }
+
+  // Đăng ký FCM Token khi user đăng nhập/mở app
+  Future<Response> registerFcmToken(Request request) async {
+    try {
+      final userId = _getAuthenticatedUserId(request);
+      if (userId == null) {
+        return Response.forbidden(
+          jsonEncode({'success': false, 'message': 'Không tìm thấy thông tin xác thực.'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      final body = await request.readAsString();
+      final data = jsonDecode(body);
+      final token = data['token'];
+      final deviceType = data['device_type'];
+
+      if (token == null || (token as String).isEmpty) {
+        return Response.badRequest(
+          body: jsonEncode({'status': 'error', 'message': 'Token là bắt buộc'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      await notificationService.fcmTokenRepository.saveToken(userId, token, deviceType);
+
+      return Response.ok(
+        jsonEncode({'status': 'success', 'message': 'Đăng ký FCM Token thành công'}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e) {
+      return Response.internalServerError(
+        body: jsonEncode({'status': 'error', 'message': e.toString()}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+  }
+
+  // Hủy đăng ký FCM Token khi user đăng xuất
+  Future<Response> deleteFcmToken(Request request) async {
+    try {
+      final body = await request.readAsString();
+      final data = jsonDecode(body);
+      final token = data['token'];
+
+      if (token == null || (token as String).isEmpty) {
+        return Response.badRequest(
+          body: jsonEncode({'status': 'error', 'message': 'Token là bắt buộc'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      await notificationService.fcmTokenRepository.deleteToken(token);
+
+      return Response.ok(
+        jsonEncode({'status': 'success', 'message': 'Xóa FCM Token thành công'}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e) {
+      return Response.internalServerError(
+        body: jsonEncode({'status': 'error', 'message': e.toString()}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+  }
 }

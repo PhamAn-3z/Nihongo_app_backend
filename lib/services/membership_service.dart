@@ -66,9 +66,9 @@ class MembershipService {
       throw Exception('Membership not found');
     }
 
-    final bool currentStatus = membership['isActive'] ?? true;
+    final bool currentStatus = membership['is_active'] ?? membership['isActive'] ?? true;
     return await membershipRepository.updateMembership(id, {
-      'isActive': !currentStatus,
+      'is_active': !currentStatus,
     });
   }
 }

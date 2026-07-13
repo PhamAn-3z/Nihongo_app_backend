@@ -473,4 +473,14 @@ class DeckRepository {
   Future<void> deleteComment(int commentId) async {
     await _client.from('deck_comments').delete().eq('comment_id', commentId);
   }
+
+  Future<int> countUserCreatedDecks(int userId) async {
+    final response = await _client
+        .from('decks')
+        .select('deck_id')
+        .eq('user_id', userId)
+        .count(CountOption.exact);
+    
+    return response.count;
+  }
 }

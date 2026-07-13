@@ -9,6 +9,14 @@ class ReceiptRepository {
     return await supabase.from('Receipt').select().eq('user_id', userId);
   }
 
+  Future<List<Map<String, dynamic>>> getAllReceipts() async {
+    return await supabase
+        .from('Receipt')
+        .select()
+        .eq('is_paid', true)
+        .order('dayCreated', ascending: false);
+  }
+
   Future<Map<String, dynamic>?> getReceiptById(int id) async {
     final response = await supabase.from('Receipt').select().eq('id', id);
     return (response as List).isEmpty ? null : response.first;

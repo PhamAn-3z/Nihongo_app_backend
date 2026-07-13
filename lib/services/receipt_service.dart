@@ -20,6 +20,10 @@ class ReceiptService {
     return await receiptRepository.getReceiptsByUserId(userId);
   }
 
+  Future<List<Map<String, dynamic>>> getAll() async {
+    return await receiptRepository.getAllReceipts();
+  }
+
   Future<Map<String, dynamic>?> getById(int id) async {
     return await receiptRepository.getReceiptById(id);
   }

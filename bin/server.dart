@@ -70,14 +70,25 @@ import 'package:flashcard_quiz_backend/routes/image_routes.dart';
 import 'package:flashcard_quiz_backend/routes/translation_routes.dart';
 import 'package:flashcard_quiz_backend/routes/admin_moderation_routes.dart';
 
+import 'package:flashcard_quiz_backend/repositories/notification_settings_repository.dart';
+import 'package:flashcard_quiz_backend/services/notification_settings_service.dart';
+import 'package:flashcard_quiz_backend/controllers/notification_settings_controller.dart';
+import 'package:flashcard_quiz_backend/routes/notification_settings_routes.dart';
+
+import 'package:flashcard_quiz_backend/repositories/fcm_token_repository.dart';
+import 'package:flashcard_quiz_backend/services/fcm_service.dart';
+
 import 'package:flashcard_quiz_backend/middlewares/auth_middleware.dart';
 import 'package:flashcard_quiz_backend/middlewares/cors_middleware.dart';
+
+import 'package:flashcard_quiz_backend/services/cron_service.dart';
 
 void main() async {
   final env = DotEnv(includePlatformEnvironment: true)..load();
 
   final String supabaseUrl = env['SUPABASE_URL'] ?? '';
   final String supabaseKey = env['SUPABASE_KEY'] ?? '';
+  final String fcmServiceAccountPath = env['FIREBASE_SERVICE_ACCOUNT_PATH'] ?? 'firebase-service-account.json';
 
   if (supabaseUrl.isEmpty || supabaseKey.isEmpty) {
     print('❌ Lỗi: Chưa cấu hình SUPABASE_URL hoặc SUPABASE_KEY trong file .env');
@@ -108,9 +119,11 @@ void main() async {
   final studyLogRepo = StudyLogRepository(supabaseClient);
   final notificationRepository = NotificationRepository(supabaseClient);
   final translationRepository = TranslationRepository(supabaseClient);
+  final fcmTokenRepository = FcmTokenRepository(supabaseClient);
 
   // Services
-  final notificationService = NotificationService(notificationRepository);
+  final fcmService = FcmService(fcmServiceAccountPath);
+  final notificationService = NotificationService(notificationRepository, fcmTokenRepository, fcmService);
   final moderationService = ModerationService(moderationRepository, userRepository, notificationService);
   final authService = AuthService(
     userRepository: userRepository,
@@ -129,7 +142,11 @@ void main() async {
   );
   final userStatsService = UserStatsService(userStatsRepository);
   final vnpayService = VnPayService();
-  final deckService = DeckService(deckRepository);
+  
+  // Deck Layer
+  //final deckRepository = DeckRepository(supabaseClient);
+  final deckService = DeckService(deckRepository, userStatsRepository);
+  //final deckService = DeckService(deckRepository);
   final studyLogService = StudyLogService(studyLogRepo);
   final translationService = TranslationService(translationRepository, geminiService);
 
@@ -159,6 +176,10 @@ void main() async {
   final userStatsController = UserStatsController(userStatsService);
   final vnpayController = VnPayController(vnpayService, receiptService);
   final deckController = DeckController(deckService);
+
+  // Notification Layer
+
+  final notificationService = NotificationService(notificationRepository, fcmTokenRepository, fcmService);
   final studyLogController = StudyLogController(studyLogService);
   final notificationController = NotificationController(notificationService);
   final audioController = AudioController(r2Service);
@@ -166,6 +187,11 @@ void main() async {
   final translationController = TranslationController(translationService);
 
   // Background Cleanup Task
+  final notificationSettingsRepository = NotificationSettingsRepository(supabaseClient);
+  final notificationSettingsService = NotificationSettingsService(notificationSettingsRepository);
+  final notificationSettingsController = NotificationSettingsController(notificationSettingsService);
+
+  // 2.1 Start Background Cleanup Task (Every 5 minutes)
   Timer.periodic(Duration(minutes: 30), (timer) async {
     print('🧹 [${DateTime.now()}] Running background cleanup: Deleting expired unpaid receipts...');
     try {
@@ -175,6 +201,11 @@ void main() async {
     }
   });
 
+  // Khởi động CronService nhắc nhở hết hạn
+  final cronService = CronService(supabaseClient, notificationService);
+  cronService.start();
+
+  // 3. Khởi tạo Router chính
   final router = Router();
 
   router.mount('/api/v1/auth', authRoutes(authController));
@@ -192,7 +223,9 @@ void main() async {
   router.mount('/api/v1/audio', audioRoutes(audioController));
   router.mount('/api/v1/images', imageRoutes(imageController));
   router.mount('/api/v1/translate', translationRoutes(translationController));
+  router.mount('/api/v1/notification-settings', notificationSettingsRoutes(notificationSettingsController));
 
+  // 5. Route được bảo vệ (Yêu cầu JWT Token)
   router.get('/api/v1/user/profile', (Request request) {
     return Response.ok(
       jsonEncode({"message": "Chào mừng! Bạn đã truy cập được vào dữ liệu yêu cầu bảo mật."}),
@@ -200,6 +233,7 @@ void main() async {
     );
   });
 
+  // 6. Cấu hình Middleware Pipeline
   final handler = Pipeline()
       .addMiddleware(logRequests())
       .addMiddleware(corsMiddleware())
@@ -208,9 +242,9 @@ void main() async {
       final path = request.url.path;
 
       // Whitelist các routes công khai
-      if (path.contains('auth/login') || 
-          path.contains('auth/register') || 
-          path.contains('auth/verify-otp') || 
+      if (path.contains('auth/login') ||
+          path.contains('auth/register') ||
+          path.contains('auth/verify-otp') ||
           path.contains('auth/resend-otp') ||
           path.contains('api/v1/decks/explore')) {
         return innerHandler(request);
@@ -226,22 +260,26 @@ void main() async {
           path.contains('api/v1/audio') ||
           path.contains('api/v1/images') ||
           path.contains('api/v1/notifications') ||
+          path.contains('api/v1/notification-settings') ||
           path.contains('api/v1/study-logs') ||
           path.contains('api/v1/translate') ||
           path.endsWith('auth/logout')) {
         return authMiddleware(moderationService)(innerHandler)(request);
       }
 
-      return innerHandler(request);
-    };
+        return innerHandler(request);
+      };
   })
   .addHandler(router);
 
+  // 6. Khởi chạy Server
   final port = int.parse(Platform.environment['PORT'] ?? '8080');
   final server = await shelf_io.serve(handler, InternetAddress.anyIPv4, port);
 
   print('🚀 SERVER ĐANG CHẠY TẠI: http://${server.address.host}:${server.port}');
+  print('💡 Mẹo: Bạn có thể dùng địa chỉ IP máy tính để test nội bộ (ví dụ: http://192.168.1.x:8080)');
   
+  // Khởi động SSH Tunnel tự động (Không bắt buộc, không chặn luồng chính)
   _startSshTunnel(port);
 }
 
@@ -254,7 +292,10 @@ void _startSshTunnel(int port) async {
       runInShell: true,
     );
 
+    // Biến để theo dõi xem đã lấy được URL chưa
     bool tunnelStarted = false;
+
+    // Lắng nghe stdout để lấy URL tunnel
     process.stdout.transform(utf8.decoder).transform(const LineSplitter()).listen((line) {
       if (line.contains('.lhr.life')) {
         final regExp = RegExp(r'https://[a-zA-Z0-9\.]+');
@@ -266,13 +307,34 @@ void _startSshTunnel(int port) async {
           print('🌍 SSH TUNNEL ĐANG HOẠT ĐỘNG TẠI: $tunnelUrl');
         }
       }
+      // Log các dòng khác từ localhost.run nếu cần debug
+      if (!tunnelStarted && line.isNotEmpty) {
+        // print('DEBUG SSH: $line');
+      }
     });
 
+    // Lắng nghe stderr
+    process.stderr.transform(utf8.decoder).transform(const LineSplitter()).listen((line) {
+      if (line.toLowerCase().contains('permission denied') || line.toLowerCase().contains('failed')) {
+        print('⚠️  SSH Tunnel Error: $line');
+      }
+    });
+
+    // Kiểm tra nếu sau 15 giây vẫn chưa có tunnel thì thông báo cho người dùng
+    Future.delayed(const Duration(seconds: 15), () {
+      if (!tunnelStarted) {
+        print('⏳ Việc tạo Tunnel đang mất nhiều thời gian hơn dự kiến.');
+        print('👉 Bạn vẫn có thể test bằng IP nội bộ hoặc kiểm tra lại kết nối mạng/SSH.');
+      }
+    });
+
+    // Đảm bảo kill SSH process khi server dừng (Ctrl+C)
     ProcessSignal.sigint.watch().listen((_) {
       process.kill();
       exit(0);
     });
   } catch (e) {
     print('❌ Không thể khởi động lệnh SSH: $e');
+    print('📌 Hãy đảm bảo bạn đã cài đặt OpenSSH (gõ "ssh" trong cmd để kiểm tra).');
   }
 }

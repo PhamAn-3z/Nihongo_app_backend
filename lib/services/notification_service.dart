@@ -1,9 +1,13 @@
 import '../repositories/notification_repository.dart';
+import '../repositories/fcm_token_repository.dart';
+import 'fcm_service.dart';
 
 class NotificationService {
   final NotificationRepository notificationRepository;
+  final FcmTokenRepository fcmTokenRepository;
+  final FcmService fcmService;
 
-  NotificationService(this.notificationRepository);
+  NotificationService(this.notificationRepository, this.fcmTokenRepository, this.fcmService);
 
   Future<List<Map<String, dynamic>>> getNotificationsForUser(int userId) async {
     return await notificationRepository.getByUserId(userId);
@@ -43,7 +47,32 @@ class NotificationService {
       data['created_at'] = DateTime.now().toIso8601String();
     }
 
-    return await notificationRepository.createNotification(data);
+    final result = await notificationRepository.createNotification(data);
+
+    if (result != null) {
+      // Gửi Push Notification sau khi lưu vào DB thành công
+      try {
+        final userId = int.tryParse(data['user_id'].toString());
+        if (userId != null) {
+          final tokens = await fcmTokenRepository.getTokensByUserId(userId);
+          if (tokens.isNotEmpty) {
+            await fcmService.sendPushNotification(
+              tokens: tokens,
+              title: data['title'],
+              body: data['body'],
+              data: {
+                'type': data['type'],
+                if (data['action_url'] != null) 'action_url': data['action_url'],
+              },
+            );
+          }
+        }
+      } catch (e) {
+        print('⚠️ Lỗi khi gửi FCM trong NotificationService: $e');
+      }
+    }
+
+    return result;
   }
 
   Future<Map<String, dynamic>?> markAsRead(int notificationId) async {
