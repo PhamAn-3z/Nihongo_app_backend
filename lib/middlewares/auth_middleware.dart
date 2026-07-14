@@ -18,8 +18,10 @@ Middleware authMiddleware() {
         final token = authHeader.replaceFirst('Bearer ', '');
         final jwt = JwtService.verifyToken(token);
 
-        // Lưu thông tin từ JWT vào context của request để Controller có thể sử dụng
-        final updatedRequest = request.change(context: {'authPayload': jwt.payload});
+        // Merge existing context to preserve routing segments
+        final updatedRequest = request.change(
+          context: Map<String, Object?>.from(request.context)..['authPayload'] = jwt.payload,
+        );
 
         return await innerHandler(updatedRequest);
       } catch (e) {
