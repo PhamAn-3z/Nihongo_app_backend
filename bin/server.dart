@@ -179,7 +179,6 @@ void main() async {
 
   // Notification Layer
 
-  final notificationService = NotificationService(notificationRepository, fcmTokenRepository, fcmService);
   final studyLogController = StudyLogController(studyLogService);
   final notificationController = NotificationController(notificationService);
   final audioController = AudioController(r2Service);
