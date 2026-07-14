@@ -191,6 +191,76 @@ class DeckController {
     }
   }
 
+  Future<Response> updateCardContent(Request request) async {
+    try {
+      final payload = request.context['authPayload'] as Map<String, dynamic>?;
+      if (payload == null || payload['userId'] == null) {
+        return Response.forbidden(jsonEncode({'message': 'Unauthorized'}));
+      }
+
+      final dynamic userId = payload['userId'];
+      final String? deckIdStr = request.params['id'];
+      final String? posIdStr = request.params['posId'];
+
+      if (deckIdStr == null || posIdStr == null) {
+        return Response.badRequest(body: jsonEncode({'message': 'Missing IDs'}));
+      }
+
+      final body = jsonDecode(await request.readAsString());
+      final List<dynamic>? headers = body['headers'];
+      final List<dynamic>? terms = body['terms'];
+
+      await _deckService.updateCardContent(
+        userId: userId,
+        deckId: int.parse(deckIdStr),
+        positionId: int.parse(posIdStr),
+        headers: headers?.cast<Map<String, dynamic>>(),
+        terms: terms?.cast<Map<String, dynamic>>(),
+      );
+
+      return Response.ok(
+        jsonEncode({"success": true, "message": "Cập nhật nội dung thẻ thành công!"}),
+        headers: {'content-type': 'application/json'},
+      );
+    } catch (e) {
+      return Response.internalServerError(
+        body: jsonEncode({"success": false, "message": e.toString()}),
+        headers: {'content-type': 'application/json'},
+      );
+    }
+  }
+
+  Future<Response> resetCardProgress(Request request) async {
+    try {
+      final payload = request.context['authPayload'] as Map<String, dynamic>?;
+      if (payload == null || payload['userId'] == null) {
+        return Response.forbidden(jsonEncode({'message': 'Unauthorized'}));
+      }
+
+      final dynamic userId = payload['userId'];
+      final String? posIdStr = request.params['posId'];
+
+      if (posIdStr == null) {
+        return Response.badRequest(body: jsonEncode({'message': 'Missing position ID'}));
+      }
+
+      await _deckService.resetCardProgress(
+        userId: userId,
+        positionId: int.parse(posIdStr),
+      );
+
+      return Response.ok(
+        jsonEncode({"success": true, "message": "Đã đặt lại tiến độ học tập cho thẻ này!"}),
+        headers: {'content-type': 'application/json'},
+      );
+    } catch (e) {
+      return Response.internalServerError(
+        body: jsonEncode({"success": false, "message": e.toString()}),
+        headers: {'content-type': 'application/json'},
+      );
+    }
+  }
+
   Future<Response> deleteDeck(Request request) async {
     try {
       final payload = request.context['authPayload'] as Map<String, dynamic>?;
@@ -504,6 +574,41 @@ class DeckController {
         jsonEncode({
           "success": true,
           "data": limitData
+        }),
+        headers: {'content-type': 'application/json'},
+      );
+    } catch (e) {
+      return Response.internalServerError(
+        body: jsonEncode({"success": false, "message": e.toString()}),
+        headers: {'content-type': 'application/json'},
+      );
+    }
+  }
+
+  Future<Response> updatePersonalizedRanks(Request request) async {
+    try {
+      final payload = request.context['authPayload'] as Map<String, dynamic>?;
+      if (payload == null || payload['userId'] == null) {
+        return Response.forbidden(jsonEncode({'message': 'Unauthorized'}));
+      }
+
+      final dynamic userId = payload['userId'];
+      final String? deckIdStr = request.params['id'];
+      
+      if (deckIdStr == null) {
+        return Response.badRequest(body: jsonEncode({'message': 'Missing deck ID'}));
+      }
+
+      final body = jsonDecode(await request.readAsString());
+      final List<dynamic> ranks = body['ranks'];
+
+      final int deckId = int.parse(deckIdStr);
+      await _deckService.updatePersonalizedRanks(deckId, userId, ranks.cast<Map<String, dynamic>>());
+
+      return Response.ok(
+        jsonEncode({
+          "success": true,
+          "message": "Cập nhật cấu hình mặt thẻ thành công!"
         }),
         headers: {'content-type': 'application/json'},
       );

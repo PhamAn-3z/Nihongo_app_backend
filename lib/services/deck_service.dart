@@ -374,12 +374,18 @@ class DeckService {
         'groupId': g['group_id'],
         'groupName': g['group_name'],
         'physicalPosition': g['position'],
-        'personalizedRank': usersGroups.isNotEmpty ? usersGroups[0]['rank'] : 'M'
+        // 'ZZ' đảm bảo những nhóm không được gán Rank sẽ luôn nằm ở cuối danh sách từ điển
+        'personalizedRank': usersGroups.isNotEmpty ? usersGroups[0]['rank'] : 'ZZ'
       };
     }).toList();
 
-    // Sắp xếp headers theo rank (Lexicographical)
-    personalizedHeaders.sort((a, b) => (a['personalizedRank'] as String).compareTo(b['personalizedRank'] as String));
+    // Sắp xếp theo thứ tự từ điển (Lexicographical) ổn định
+    personalizedHeaders.sort((a, b) {
+      int cmp = (a['personalizedRank'] as String).compareTo(b['personalizedRank'] as String);
+      if (cmp != 0) return cmp;
+      // Nếu Rank bằng nhau (cùng là ZZ), sắp xếp theo vị trí vật lý ban đầu
+      return (a['physicalPosition'] as int).compareTo(b['physicalPosition'] as int);
+    });
 
     // 2. Định dạng lại flashcards
     final List<dynamic> positions = rawData['positions'];
@@ -465,9 +471,40 @@ class DeckService {
     await _deckRepository.deleteDeck(deckId, formattedUserId);
   }
 
+  Future<void> updateCardContent({
+    required dynamic userId,
+    required int deckId,
+    required int positionId,
+    List<Map<String, dynamic>>? headers,
+    List<Map<String, dynamic>>? terms,
+  }) async {
+    final int formattedUserId = userId is String ? int.parse(userId) : userId as int;
+
+    await _deckRepository.updateCardContent(
+      userId: formattedUserId,
+      deckId: deckId,
+      positionId: positionId,
+      headers: headers,
+      terms: terms,
+    );
+  }
+
+  Future<void> resetCardProgress({
+    required dynamic userId,
+    required int positionId,
+  }) async {
+    final int formattedUserId = userId is String ? int.parse(userId) : userId as int;
+    await _deckRepository.resetCardProgress(formattedUserId, positionId);
+  }
+
   Future<void> setFavoriteStatus(int deckId, dynamic userId, bool isFavorite) async {
     final int formattedUserId = userId is String ? int.parse(userId) : userId as int;
     await _deckRepository.updateFavoriteStatus(deckId, formattedUserId, isFavorite);
+  }
+
+  Future<void> updatePersonalizedRanks(int deckId, dynamic userId, List<Map<String, dynamic>> ranks) async {
+    final int formattedUserId = userId is String ? int.parse(userId) : userId as int;
+    await _deckRepository.updatePersonalizedRanks(formattedUserId, ranks);
   }
 
   Future<List<Map<String, dynamic>>> getDeckComments(int deckId, dynamic userId) async {
