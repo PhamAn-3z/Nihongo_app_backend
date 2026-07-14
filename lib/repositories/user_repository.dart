@@ -25,14 +25,15 @@ class UserRepository {
     return (response as List).isEmpty ? null : response.first;
   }
 
-  // Tìm user theo user_id
+  // Tìm user theo user_id (Bao gồm cả thông tin profile)
   Future<Map<String, dynamic>?> findById(String userId) async {
     final response = await supabase
         .from('users')
-        .select()
-        .eq('user_id', userId);
+        .select('*, user_profiles(*)')
+        .eq('user_id', userId)
+        .maybeSingle();
 
-    return (response as List).isEmpty ? null : response.first;
+    return response;
   }
 
   // Tạo user mới
@@ -42,6 +43,20 @@ class UserRepository {
         .insert(user)
         .select();
     return (response as List).isEmpty ? null : response.first;
+  }
+
+  // Cập nhật profile (full_name, gender, phone_number, avatar_url, etc.)
+  Future<Map<String, dynamic>> updateProfile(int userId, Map<String, dynamic> profileData) async {
+    final response = await supabase
+        .from('user_profiles')
+        .upsert({
+          'user_id': userId,
+          ...profileData,
+          'updated_at': DateTime.now().toIso8601String(),
+        })
+        .select()
+        .single();
+    return response;
   }
 
   // Cập nhật trạng thái xác thực email

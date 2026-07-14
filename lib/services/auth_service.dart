@@ -113,6 +113,7 @@ class AuthService {
     final token = JwtService.generateToken(
       userId: user['user_id'].toString(),
       email: user['email'],
+      roleId: user['role_id'].toString(),
     );
 
     return token;
