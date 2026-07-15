@@ -32,8 +32,8 @@ Router deckRoutes(DeckController controller) {
   // Cập nhật Rank cá nhân hóa (Mặt trước/Mặt sau)
   router.patch('/<id>/personalized-ranks', controller.updatePersonalizedRanks);
 
-  // Đặt lại tiến độ học tập của một thẻ
-  router.post('/cards/<posId>/reset-progress', controller.resetCardProgress);
+  // Đặt lại tiến độ học tập cho toàn bộ bộ đề
+  router.post('/<id>/reset-progress', controller.resetDeckProgress);
 
   // Xóa bộ đề vĩnh viễn
   router.delete('/<id>', controller.deleteDeck);

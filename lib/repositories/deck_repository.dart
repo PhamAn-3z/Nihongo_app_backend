@@ -319,8 +319,21 @@ class DeckRepository {
     }
   }
 
-  Future<void> resetCardProgress(int userId, int positionId) async {
-    final response = await _client
+  Future<void> resetDeckProgress(int userId, int deckId) async {
+    // 1. Lấy tất cả position_id thuộc về deck_id này
+    final positionsResponse = await _client
+        .from('positions')
+        .select('position_id')
+        .eq('deck_id', deckId);
+    
+    final List<int> positionIds = (positionsResponse as List)
+        .map((p) => p['position_id'] as int)
+        .toList();
+        
+    if (positionIds.isEmpty) return;
+
+    // 2. Cập nhật hàng loạt bảng users_positions cho các ID thẻ đã tìm thấy
+    await _client
         .from('users_positions')
         .update({
           'status': 'NEW',
@@ -330,12 +343,7 @@ class DeckRepository {
           'next_review': DateTime.now().toIso8601String(),
         })
         .eq('user_id', userId)
-        .eq('position_id', positionId)
-        .select();
-
-    if ((response as List).isEmpty) {
-      throw Exception('Không tìm thấy dữ liệu học tập của thẻ này.');
-    }
+        .inFilter('position_id', positionIds);
   }
 
   Future<List<Map<String, dynamic>>> getRecentlyViewedDecks(int userId, {int limit = 10}) async {

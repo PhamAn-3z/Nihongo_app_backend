@@ -230,7 +230,7 @@ class DeckController {
     }
   }
 
-  Future<Response> resetCardProgress(Request request) async {
+  Future<Response> resetDeckProgress(Request request) async {
     try {
       final payload = request.context['authPayload'] as Map<String, dynamic>?;
       if (payload == null || payload['userId'] == null) {
@@ -238,19 +238,19 @@ class DeckController {
       }
 
       final dynamic userId = payload['userId'];
-      final String? posIdStr = request.params['posId'];
+      final String? deckIdStr = request.params['id'];
 
-      if (posIdStr == null) {
-        return Response.badRequest(body: jsonEncode({'message': 'Missing position ID'}));
+      if (deckIdStr == null) {
+        return Response.badRequest(body: jsonEncode({'message': 'Missing deck ID'}));
       }
 
-      await _deckService.resetCardProgress(
+      await _deckService.resetDeckProgress(
         userId: userId,
-        positionId: int.parse(posIdStr),
+        deckId: int.parse(deckIdStr),
       );
 
       return Response.ok(
-        jsonEncode({"success": true, "message": "Đã đặt lại tiến độ học tập cho thẻ này!"}),
+        jsonEncode({"success": true, "message": "Đã đặt lại tiến độ học tập cho toàn bộ bộ đề!"}),
         headers: {'content-type': 'application/json'},
       );
     } catch (e) {

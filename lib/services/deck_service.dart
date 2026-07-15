@@ -489,12 +489,12 @@ class DeckService {
     );
   }
 
-  Future<void> resetCardProgress({
+  Future<void> resetDeckProgress({
     required dynamic userId,
-    required int positionId,
+    required int deckId,
   }) async {
     final int formattedUserId = userId is String ? int.parse(userId) : userId as int;
-    await _deckRepository.resetCardProgress(formattedUserId, positionId);
+    await _deckRepository.resetDeckProgress(formattedUserId, deckId);
   }
 
   Future<void> setFavoriteStatus(int deckId, dynamic userId, bool isFavorite) async {
