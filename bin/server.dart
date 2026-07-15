@@ -168,7 +168,7 @@ void main() async {
 
   // Controllers
   final authController = AuthController(authService);
-  final userController = UserController(userRepository);
+  final userController = UserController(userRepository, userStatsService);
   final moderationController = AdminModerationController(moderationService, userRepository);
   final membershipController = MembershipController(membershipService);
   final promoCodeController = PromoCodeController(promoCodeService);

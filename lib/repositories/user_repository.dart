@@ -25,11 +25,11 @@ class UserRepository {
     return (response as List).isEmpty ? null : response.first;
   }
 
-  // Tìm user theo user_id (Bao gồm cả thông tin profile)
+  // Tìm user theo user_id (Bao gồm cả thông tin profile, stats và hạng thành viên)
   Future<Map<String, dynamic>?> findById(String userId) async {
     final response = await supabase
         .from('users')
-        .select('*, user_profiles(*)')
+        .select('*, user_profiles(*), user_stats(*, Membership(*))')
         .eq('user_id', userId)
         .maybeSingle();
 

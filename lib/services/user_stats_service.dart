@@ -9,6 +9,27 @@ class UserStatsService {
     return await userStatsRepository.getUserStats(userId);
   }
 
+  /// Kiểm tra và tự động thu hồi nếu gói Membership đã hết hạn
+  Future<void> checkAndRevokeIfExpired(int userId) async {
+    final stats = await userStatsRepository.getUserStats(userId);
+    if (stats == null) return;
+
+    final int membershipId = stats['membership_id'] ?? 1;
+    final String? expiredDateStr = stats['membership_expired_date'];
+
+    // Nếu không phải gói Free (ID=1) và có ngày hết hạn
+    if (membershipId != 1 && expiredDateStr != null) {
+      final expiredDate = DateTime.parse(expiredDateStr);
+      if (expiredDate.isBefore(DateTime.now())) {
+        print('🔔 User $userId đã hết hạn gói Pro. Tự động chuyển về gói Free.');
+        await userStatsRepository.updateStats(userId, {
+          'membership_id': 1,
+          'membership_expired_date': null,
+        });
+      }
+    }
+  }
+
   Future<Map<String, dynamic>?> updateStats(int userId, Map<String, dynamic> updates) async {
     // Prevent updating user_id
     updates.remove('user_id');

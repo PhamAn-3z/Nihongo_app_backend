@@ -1,11 +1,13 @@
 import 'dart:convert';
 import 'package:shelf/shelf.dart';
 import '../repositories/user_repository.dart';
+import '../services/user_stats_service.dart';
 
 class UserController {
   final UserRepository userRepository;
+  final UserStatsService userStatsService;
 
-  UserController(this.userRepository);
+  UserController(this.userRepository, this.userStatsService);
 
   // Lấy thông tin Profile
   Future<Response> getProfile(Request request) async {
@@ -15,12 +17,33 @@ class UserController {
         return Response.forbidden(jsonEncode({"message": "Unauthorized"}));
       }
 
-      final userId = authPayload['userId'];
+      final userId = int.parse(authPayload['userId'].toString());
+
+      // Kiểm tra và thu hồi Membership nếu hết hạn ngay khi user truy cập Profile
+      await userStatsService.checkAndRevokeIfExpired(userId);
+
       final user = await userRepository.findById(userId.toString());
 
       if (user == null) {
         return Response.notFound(jsonEncode({"message": "User not found"}));
       }
+
+      // Lấy thông tin stats và membership
+      final statsData = user['user_stats'];
+      final stats = (statsData is List && statsData.isNotEmpty) ? statsData[0] : statsData;
+
+      // Lấy thông tin profile
+      final profileData = user['user_profiles'];
+      final profile = (profileData is List && profileData.isNotEmpty) ? profileData[0] : (profileData ?? {});
+
+      // Lấy rank từ Membership lồng bên trong stats
+      String membershipRank = "None";
+      if (stats != null && stats['Membership'] != null) {
+        final membership = (stats['Membership'] is List) ? stats['Membership'][0] : stats['Membership'];
+        membershipRank = membership['membershipRank'] ?? "None";
+      }
+
+      final bool isPremium = membershipRank != "None" && membershipRank != "N/A";
 
       return Response.ok(
         jsonEncode({
@@ -30,8 +53,23 @@ class UserController {
             "username": user['username'],
             "email": user['email'],
             "role_id": user['role_id'],
-            "status": user['status'],
-            "profile": user['user_profiles'], // Thông tin từ bảng user_profiles
+            "is_premium": isPremium,
+            "membership_rank": membershipRank,
+            // Làm phẳng Profile
+            "full_name": profile['full_name'],
+            "avatar_url": profile['avatar_url'],
+            "phone_number": profile['phone_number'],
+            "gender": profile['gender'],
+            "date_of_birth": profile['date_of_birth'],
+            // Làm gọn Stats
+            "stats": {
+              "total_exp": stats?['total_exp'] ?? 0,
+              "current_streak": stats?['current_streak'] ?? 0,
+              "max_streak": stats?['max_streak'] ?? 0,
+              "level": ((stats?['total_exp'] ?? 0) ~/ 100) + 1,
+              "last_study_date": stats?['last_study_date'],
+              "membership_expired_date": stats?['membership_expired_date'],
+            }
           }
         }),
         headers: {'content-type': 'application/json'},

@@ -37,8 +37,47 @@ class DeckService {
     // Ép kiểu userId về int nếu nó là String (do JWT payload thường là String)
     final int formattedUserId = userId is String ? int.parse(userId) : userId as int;
 
-    // 1. Kiểm tra giới hạn Membership trước khi tạo
-    await _checkMembershipLimit(formattedUserId);
+    // 1. Lấy thông tin Membership và Kiểm tra giới hạn số lượng bộ đề
+    final userStats = await _userStatsRepository.getUserStatsWithMembership(formattedUserId);
+    if (userStats == null || userStats['Membership'] == null) {
+      throw Exception('Không tìm thấy thông tin hội viên của người dùng.');
+    }
+
+    final membership = userStats['Membership'];
+    final String rank = membership['membershipRank'] ?? 'None';
+    final int maxDecks = int.tryParse(membership['maxFlashcardSet']?.toString() ?? '') ?? 0;
+
+    // A. Kiểm tra số lượng bộ đề hiện tại
+    final int currentDecks = await _deckRepository.countUserCreatedDecks(formattedUserId);
+    if (maxDecks > 0 && currentDecks >= maxDecks) {
+      throw Exception('Bạn đã đạt giới hạn tối đa ($maxDecks bộ đề) của gói $rank. Vui lòng nâng cấp để tạo thêm!');
+    }
+
+    // B. Kiểm tra tính năng "Thêm nhóm" (Phải từ gói Pro trở lên nếu > 2 nhóm)
+    if (headers.length > 2 && rank == 'None') {
+      throw Exception('Tính năng tạo bộ đề đa chiều (>2 nhóm) yêu cầu nâng cấp lên gói PRO.');
+    }
+
+    // C. Kiểm tra tính năng Multimedia (Ảnh/Âm thanh - Chỉ dành cho Premium)
+    bool hasMultimedia = false;
+    for (var row in rows) {
+      for (var value in row.values) {
+        if (value is Map && (value.containsKey('image') || value.containsKey('audio'))) {
+          hasMultimedia = true;
+          break;
+        }
+      }
+      if (hasMultimedia) break;
+    }
+
+    if (hasMultimedia && rank != 'Premium') {
+      throw Exception('Tính năng đính kèm Hình ảnh và Âm thanh yêu cầu nâng cấp lên gói PREMIUM.');
+    }
+
+    // D. Giới hạn số lượng thẻ tối đa trong một bộ đề (Security Check)
+    if (rows.length > 200) {
+      throw Exception('Mỗi bộ đề tối đa chỉ được chứa 200 thẻ. Vui lòng giảm bớt số lượng hàng.');
+    }
 
     // 2. Thực hiện tạo bộ đề
     return await _deckRepository.bulkImportCreateDeck(

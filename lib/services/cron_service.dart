@@ -13,18 +13,46 @@ class CronService {
     // Chạy lần đầu sau khi khởi động 10 giây (rút ngắn để dễ test)
     Timer(const Duration(seconds: 10), () {
       _checkAndSendExpiryNotifications();
+      _handleExpiredMemberships();
     });
 
     // Sau đó chạy định kỳ mỗi 24 giờ
     _expiryCheckTimer = Timer.periodic(const Duration(hours: 24), (timer) {
       _checkAndSendExpiryNotifications();
+      _handleExpiredMemberships();
     });
     
-    print('🕒 CronService: Đã khởi động tác vụ kiểm tra gia hạn tự động.');
+    print('🕒 CronService: Đã khởi động tác vụ kiểm tra gia hạn và quét hết hạn tự động.');
   }
 
   void stop() {
     _expiryCheckTimer?.cancel();
+  }
+
+  Future<void> _handleExpiredMemberships() async {
+    print('🕒 [${DateTime.now()}] Bắt đầu quét thu hồi Membership đã hết hạn...');
+    try {
+      final now = DateTime.now().toIso8601String();
+
+      // 1. Tìm và cập nhật những User có ngày hết hạn < hiện tại và đang không phải là gói Free (id=1)
+      final response = await supabase
+          .from('user_stats')
+          .update({
+            'membership_id': 1, // Chuyển về gói Free
+            'membership_expired_date': null,
+          })
+          .neq('membership_id', 1) // Chỉ quét những người đang là Pro
+          .lt('membership_expired_date', now)
+          .select('user_id');
+
+      if (response is List && response.isNotEmpty) {
+        print('✅ Đã thu hồi quyền Pro của ${response.length} người dùng đã quá hạn.');
+      } else {
+        print('✅ Không có người dùng nào hết hạn cần thu hồi.');
+      }
+    } catch (e) {
+      print('❌ Lỗi khi chạy CronService (Handle Expired): $e');
+    }
   }
 
   Future<void> _checkAndSendExpiryNotifications() async {
