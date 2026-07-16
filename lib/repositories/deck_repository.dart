@@ -283,6 +283,69 @@ class DeckRepository {
     }
   }
 
+  Future<void> updateCardContent({
+    required int userId,
+    required int deckId,
+    required int positionId,
+    List<Map<String, dynamic>>? headers,
+    List<Map<String, dynamic>>? terms,
+  }) async {
+    // 1. Kiểm tra quyền sở hữu bộ đề
+    final deck = await _client.from('decks').select('user_id').eq('deck_id', deckId).maybeSingle();
+    if (deck == null || deck['user_id'] != userId) {
+      throw Exception('Bạn không có quyền chỉnh sửa bộ đề này!');
+    }
+
+    // 2. Cập nhật tên các nhóm (Headers) nếu có
+    if (headers != null && headers.isNotEmpty) {
+      for (var h in headers) {
+        await _client
+            .from('groups')
+            .update({'group_name': h['name']})
+            .eq('group_id', h['groupId'])
+            .eq('deck_id', deckId);
+      }
+    }
+
+    // 3. Cập nhật nội dung các ô (Terms) nếu có
+    if (terms != null && terms.isNotEmpty) {
+      for (var t in terms) {
+        await _client
+            .from('terms')
+            .update({'content': t['content']})
+            .eq('group_id', t['groupId'])
+            .eq('position_id', positionId);
+      }
+    }
+  }
+
+  Future<void> resetDeckProgress(int userId, int deckId) async {
+    // 1. Lấy tất cả position_id thuộc về deck_id này
+    final positionsResponse = await _client
+        .from('positions')
+        .select('position_id')
+        .eq('deck_id', deckId);
+    
+    final List<int> positionIds = (positionsResponse as List)
+        .map((p) => p['position_id'] as int)
+        .toList();
+        
+    if (positionIds.isEmpty) return;
+
+    // 2. Cập nhật hàng loạt bảng users_positions cho các ID thẻ đã tìm thấy
+    await _client
+        .from('users_positions')
+        .update({
+          'status': 'NEW',
+          'ease_factor': 2.5,
+          'interval': 0,
+          'review_count': 0,
+          'next_review': DateTime.now().toIso8601String(),
+        })
+        .eq('user_id', userId)
+        .inFilter('position_id', positionIds);
+  }
+
   Future<List<Map<String, dynamic>>> getRecentlyViewedDecks(int userId, {int limit = 10}) async {
     // Truy vấn nhật ký học tập, lấy thông tin bộ đề kèm theo và các thông số học tập
     final response = await _client
@@ -392,6 +455,16 @@ class DeckRepository {
 
     if ((response as List).isEmpty) {
       throw Exception('Hành động không hợp lệ! Bạn phải lưu bộ đề này vào thư viện trước khi đánh dấu yêu thích.');
+    }
+  }
+
+  Future<void> updatePersonalizedRanks(int userId, List<Map<String, dynamic>> ranks) async {
+    for (var rankData in ranks) {
+      await _client.from('users_groups').upsert({
+        'user_id': userId,
+        'group_id': rankData['groupId'],
+        'rank': rankData['personalizedRank'],
+      }, onConflict: 'user_id, group_id');
     }
   }
 

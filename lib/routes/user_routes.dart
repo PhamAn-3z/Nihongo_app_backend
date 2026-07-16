@@ -7,5 +7,8 @@ Router userRoutes(UserController controller) {
   // API lấy thông tin Profile: GET /profile
   router.get('/profile', controller.getProfile);
 
+  // API cập nhật thông tin Profile: PUT /profile
+  router.put('/profile', controller.updateProfile);
+
   return router;
 }

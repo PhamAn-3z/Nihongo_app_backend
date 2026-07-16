@@ -25,14 +25,24 @@ class UserRepository {
     return (response as List).isEmpty ? null : response.first;
   }
 
-  // Tìm user theo user_id
+  // Tìm user theo user_id (Bao gồm cả thông tin profile, stats và hạng thành viên)
   Future<Map<String, dynamic>?> findById(String userId) async {
     final response = await supabase
         .from('users')
-        .select()
-        .eq('user_id', userId);
+        .select('*, user_profiles(*), user_stats(*, Membership(*))')
+        .eq('user_id', userId)
+        .maybeSingle();
 
-    return (response as List).isEmpty ? null : response.first;
+    return response;
+  }
+
+  // Lấy tất cả user (Dành cho Admin)
+  Future<List<Map<String, dynamic>>> getAllUsers() async {
+    final response = await supabase
+        .from('users')
+        .select('*, user_profiles(*)')
+        .order('user_id', ascending: true);
+    return List<Map<String, dynamic>>.from(response);
   }
 
   // Tạo user mới
@@ -44,11 +54,33 @@ class UserRepository {
     return (response as List).isEmpty ? null : response.first;
   }
 
+  // Cập nhật profile (full_name, gender, phone_number, avatar_url, etc.)
+  Future<Map<String, dynamic>> updateProfile(int userId, Map<String, dynamic> profileData) async {
+    final response = await supabase
+        .from('user_profiles')
+        .upsert({
+          'user_id': userId,
+          ...profileData,
+          'updated_at': DateTime.now().toIso8601String(),
+        })
+        .select()
+        .single();
+    return response;
+  }
+
   // Cập nhật trạng thái xác thực email
   Future<void> markEmailAsVerified(int userId) async {
     await supabase
         .from('users')
         .update({'email_verified': true})
+        .eq('user_id', userId);
+  }
+
+  // Cập nhật mật khẩu mới (Dành cho Forgot Password)
+  Future<void> updatePassword(int userId, String hashedPassword) async {
+    await supabase
+        .from('users')
+        .update({'password_hash': hashedPassword})
         .eq('user_id', userId);
   }
 

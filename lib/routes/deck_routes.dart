@@ -26,6 +26,15 @@ Router deckRoutes(DeckController controller) {
   // Lấy dữ liệu học tập của một bộ đề cụ thể
   router.get('/<id>/study', controller.getDeckStudyData);
 
+  // Cập nhật nội dung thẻ (Text/Media) và Tên nhóm
+  router.patch('/<id>/cards/<posId>/content', controller.updateCardContent);
+
+  // Cập nhật Rank cá nhân hóa (Mặt trước/Mặt sau)
+  router.patch('/<id>/personalized-ranks', controller.updatePersonalizedRanks);
+
+  // Đặt lại tiến độ học tập cho toàn bộ bộ đề
+  router.post('/<id>/reset-progress', controller.resetDeckProgress);
+
   // Xóa bộ đề vĩnh viễn
   router.delete('/<id>', controller.deleteDeck);
 

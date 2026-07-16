@@ -6,10 +6,12 @@ class JwtService {
   static String generateToken({
     required String userId,
     required String email,
+    required String roleId,
   }) {
     final jwt = JWT({
       'userId': userId,
       'email': email,
+      'roleId': roleId,
     });
 
     return jwt.sign(
