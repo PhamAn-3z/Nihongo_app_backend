@@ -21,6 +21,25 @@ class AdminModerationController {
     return user != null && user['role_id'] == 3;
   }
 
+  // GET /admin/users
+  Future<Response> getAllUsers(Request request) async {
+    try {
+      if (!await _isAdmin(request)) return Response.forbidden(jsonEncode({'message': 'Quyền truy cập bị từ chối'}));
+
+      final users = await userRepository.getAllUsers();
+      
+      return Response.ok(
+        jsonEncode({
+          "success": true,
+          "data": users
+        }),
+        headers: {'content-type': 'application/json'},
+      );
+    } catch (e) {
+      return Response.internalServerError(body: jsonEncode({'message': e.toString()}));
+    }
+  }
+
   // POST /admin/users/:id/warning
   Future<Response> warnUser(Request request, String id) async {
     try {

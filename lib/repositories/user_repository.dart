@@ -36,6 +36,15 @@ class UserRepository {
     return response;
   }
 
+  // Lấy tất cả user (Dành cho Admin)
+  Future<List<Map<String, dynamic>>> getAllUsers() async {
+    final response = await supabase
+        .from('users')
+        .select('*, user_profiles(*)')
+        .order('user_id', ascending: true);
+    return List<Map<String, dynamic>>.from(response);
+  }
+
   // Tạo user mới
   Future<Map<String, dynamic>?> createUser(Map<String, dynamic> user) async {
     final response = await supabase

@@ -4,6 +4,9 @@ import '../controllers/admin_moderation_controller.dart';
 Router adminModerationRoutes(AdminModerationController controller) {
   final router = Router();
 
+  // Lấy danh sách tất cả người dùng (Admin)
+  router.get('/users', controller.getAllUsers);
+
   // Cảnh cáo người dùng
   router.post('/users/<id>/warning', controller.warnUser);
 
