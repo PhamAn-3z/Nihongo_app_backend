@@ -9,22 +9,33 @@ class AdminModerationController {
 
   AdminModerationController(this.moderationService, this.userRepository);
 
-  // Helper để kiểm tra quyền Admin
-  Future<bool> _isAdmin(Request request) async {
+  /// Kiểm tra quyền Admin trực tiếp từ Token Payload
+  bool _isAdmin(Request request) {
     final authPayload = request.context['authPayload'] as Map<String, dynamic>?;
     if (authPayload == null) return false;
 
-    final adminId = authPayload['userId'];
-    final user = await userRepository.findById(adminId.toString());
+    // Lấy roleId từ token (đảm bảo key 'roleId' khớp với JwtService)
+    final roleId = authPayload['roleId'];
     
-    // role_id = 3 là Admin
-    return user != null && user['role_id'] == 3;
+    // Log để debug - Bạn hãy quan sát terminal khi gọi API
+    print('DEBUG: Checking permissions for UserID: ${authPayload['userId']} - RoleID in token: $roleId');
+
+    // So sánh: role_id = 3 là Admin. Ép kiểu về String để so sánh an toàn nhất.
+    return roleId != null && roleId.toString() == '3';
   }
 
   // GET /admin/users
   Future<Response> getAllUsers(Request request) async {
     try {
-      if (!await _isAdmin(request)) return Response.forbidden(jsonEncode({'message': 'Quyền truy cập bị từ chối'}));
+      if (!_isAdmin(request)) {
+        return Response.forbidden(
+          jsonEncode({
+            'success': false, 
+            'message': 'Quyền truy cập bị từ chối: Yêu cầu quyền Admin (role_id=3)'
+          }),
+          headers: {'content-type': 'application/json'},
+        );
+      }
 
       final users = await userRepository.getAllUsers();
       
@@ -43,14 +54,14 @@ class AdminModerationController {
   // POST /admin/users/:id/warning
   Future<Response> warnUser(Request request, String id) async {
     try {
-      if (!await _isAdmin(request)) return Response.forbidden(jsonEncode({'message': 'Quyền truy cập bị từ chối'}));
+      if (!_isAdmin(request)) return Response.forbidden(jsonEncode({'message': 'Quyền truy cập bị từ chối'}));
 
       final data = jsonDecode(await request.readAsString());
       final reason = data['reason'];
       if (reason == null) return Response.badRequest(body: jsonEncode({'message': 'Lý do là bắt buộc'}));
 
       final authPayload = request.context['authPayload'] as Map<String, dynamic>;
-      final adminId = int.parse(authPayload['userId']);
+      final adminId = int.parse(authPayload['userId'].toString());
 
       await moderationService.warnUser(
         userId: int.parse(id),
@@ -67,7 +78,7 @@ class AdminModerationController {
   // POST /admin/users/:id/temp-ban
   Future<Response> tempBanUser(Request request, String id) async {
     try {
-      if (!await _isAdmin(request)) return Response.forbidden(jsonEncode({'message': 'Quyền truy cập bị từ chối'}));
+      if (!_isAdmin(request)) return Response.forbidden(jsonEncode({'message': 'Quyền truy cập bị từ chối'}));
 
       final data = jsonDecode(await request.readAsString());
       final reason = data['reason'];
@@ -78,7 +89,7 @@ class AdminModerationController {
       }
 
       final authPayload = request.context['authPayload'] as Map<String, dynamic>;
-      final adminId = int.parse(authPayload['userId']);
+      final adminId = int.parse(authPayload['userId'].toString());
 
       await moderationService.tempBan(
         userId: int.parse(id),
@@ -96,14 +107,14 @@ class AdminModerationController {
   // POST /admin/users/:id/permanent-ban
   Future<Response> permanentBanUser(Request request, String id) async {
     try {
-      if (!await _isAdmin(request)) return Response.forbidden(jsonEncode({'message': 'Quyền truy cập bị từ chối'}));
+      if (!_isAdmin(request)) return Response.forbidden(jsonEncode({'message': 'Quyền truy cập bị từ chối'}));
 
       final data = jsonDecode(await request.readAsString());
       final reason = data['reason'];
       if (reason == null) return Response.badRequest(body: jsonEncode({'message': 'Lý do là bắt buộc'}));
 
       final authPayload = request.context['authPayload'] as Map<String, dynamic>;
-      final adminId = int.parse(authPayload['userId']);
+      final adminId = int.parse(authPayload['userId'].toString());
 
       await moderationService.permanentBan(
         userId: int.parse(id),
@@ -120,7 +131,7 @@ class AdminModerationController {
   // GET /admin/users/:id/penalties
   Future<Response> getPenaltyHistory(Request request, String id) async {
     try {
-      if (!await _isAdmin(request)) return Response.forbidden(jsonEncode({'message': 'Quyền truy cập bị từ chối'}));
+      if (!_isAdmin(request)) return Response.forbidden(jsonEncode({'message': 'Quyền truy cập bị từ chối'}));
 
       final history = await moderationService.getPenaltyHistory(int.parse(id));
       return Response.ok(jsonEncode(history), headers: {'content-type': 'application/json'});
