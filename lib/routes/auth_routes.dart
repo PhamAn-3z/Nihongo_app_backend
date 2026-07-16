@@ -16,6 +16,12 @@ Router authRoutes(AuthController controller) {
   // API Gửi lại OTP: POST /api/v1/auth/resend-otp
   router.post('/resend-otp', controller.resendOtp);
 
+  // API Quên mật khẩu: POST /api/v1/auth/forgot-password
+  router.post('/forgot-password', controller.forgotPassword);
+
+  // API Đặt lại mật khẩu: POST /api/v1/auth/reset-password
+  router.post('/reset-password', controller.resetPassword);
+
   // API Đăng xuất: POST /api/v1/auth/logout
   router.post('/logout', controller.logout);
 

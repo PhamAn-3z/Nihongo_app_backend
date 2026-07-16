@@ -67,6 +67,14 @@ class UserRepository {
         .eq('user_id', userId);
   }
 
+  // Cập nhật mật khẩu mới (Dành cho Forgot Password)
+  Future<void> updatePassword(int userId, String hashedPassword) async {
+    await supabase
+        .from('users')
+        .update({'password_hash': hashedPassword})
+        .eq('user_id', userId);
+  }
+
   // Cập nhật trạng thái (active, warned, temporarily_banned, permanently_banned)
   Future<void> updateStatus(int userId, String status) async {
     await supabase

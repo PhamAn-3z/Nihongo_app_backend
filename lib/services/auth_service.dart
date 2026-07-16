@@ -12,7 +12,7 @@ class AuthService {
   final UserStatsRepository userStatsRepository;
   final EmailVerificationRepository emailVerificationRepository;
   final EmailService emailService;
-  final ModerationService moderationService; // Thêm ModerationService
+  final ModerationService moderationService;
 
   AuthService({
     required this.userRepository,
@@ -45,7 +45,7 @@ class AuthService {
       'username': username,
       'created_at': DateTime.now().toIso8601String(),
       'email_verified': false,
-      'status': 'active', // Mặc định là active
+      'status': 'active',
     });
 
     final userId = newUser?['user_id'];
@@ -103,12 +103,10 @@ class AuthService {
 
     final userId = int.parse(user['user_id'].toString());
 
-    // --- KIỂM TRA TRẠNG THÁI BAN ---
     final banMessage = await moderationService.checkUserAccess(userId);
     if (banMessage != null) {
       throw Exception(banMessage);
     }
-    // -------------------------------
 
     final token = JwtService.generateToken(
       userId: user['user_id'].toString(),
@@ -173,5 +171,55 @@ class AuthService {
     );
 
     await emailService.sendVerificationOtp(email, otp);
+  }
+
+  // --- QUÊN MẬT KHẨU ---
+  Future<void> forgotPassword(String email) async {
+    final user = await userRepository.findByEmail(email);
+    if (user == null) {
+      throw Exception('User not found');
+    }
+
+    final userId = int.parse(user['user_id'].toString());
+    final otp = OtpUtils.generateOtp();
+    final expiresAt = DateTime.now().add(const Duration(minutes: 10)); // OTP cho pass dài hơn (10p)
+
+    await emailVerificationRepository.createVerification(
+      userId: userId,
+      otpCode: otp,
+      expiresAt: expiresAt,
+    );
+
+    await emailService.sendVerificationOtp(email, otp);
+  }
+
+  // --- ĐẶT LẠI MẬT KHẨU ---
+  Future<void> resetPassword({
+    required String email,
+    required String otp,
+    required String newPassword,
+  }) async {
+    final user = await userRepository.findByEmail(email);
+    if (user == null) {
+      throw Exception('User not found');
+    }
+
+    final userId = int.parse(user['user_id'].toString());
+
+    // 1. Kiểm tra OTP mới nhất
+    final verification = await emailVerificationRepository.findLatestByUserId(userId);
+    if (verification == null) throw Exception('No verification code found');
+    if (verification['verified'] == true) throw Exception('Code already used');
+    
+    final expiresAt = DateTime.parse(verification['expires_at']);
+    if (expiresAt.isBefore(DateTime.now())) throw Exception('OTP expired');
+    if (verification['otp_code'] != otp) throw Exception('Invalid OTP code');
+
+    // 2. Hash mật khẩu mới
+    final hashedPassword = PasswordUtils.hashPassword(newPassword);
+
+    // 3. Cập nhật mật khẩu và đánh dấu OTP đã dùng
+    await userRepository.updatePassword(userId, hashedPassword);
+    await emailVerificationRepository.markAsVerified(verification['id']);
   }
 }

@@ -191,6 +191,84 @@ class AuthController {
     }
   }
 
+  Future<Response> forgotPassword(Request request) async {
+    try {
+      final body = await request.readAsString();
+      final data = jsonDecode(body);
+      final email = data['email'];
+
+      if (email == null) {
+        return Response.badRequest(
+          body: jsonEncode({'message': 'Email is required'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      await authService.forgotPassword(email);
+
+      return Response.ok(
+        jsonEncode({'message': 'Password reset OTP has been sent to your email.'}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e) {
+      return Response.badRequest(
+        body: jsonEncode({'message': e.toString().replaceAll('Exception: ', '')}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+  }
+
+  Future<Response> resetPassword(Request request) async {
+    try {
+      final body = await request.readAsString();
+      final data = jsonDecode(body);
+
+      final email = data['email'];
+      final otp = data['otp'];
+      final newPassword = data['new_password'];
+      final confirmedPassword = data['confirmed_password'];
+
+      if (email == null || otp == null || newPassword == null || confirmedPassword == null) {
+        return Response.badRequest(
+          body: jsonEncode({'message': 'Email, OTP, new_password, and confirmed_password are required'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      if (newPassword != confirmedPassword) {
+        return Response.badRequest(
+          body: jsonEncode({'message': 'Passwords do not match'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      if (!PasswordUtils.isStrongPassword(newPassword)) {
+        return Response.badRequest(
+          body: jsonEncode({
+            'message': 'Password must be at least 8 characters long, include at least one number and one uppercase letter'
+          }),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      await authService.resetPassword(
+        email: email,
+        otp: otp,
+        newPassword: newPassword,
+      );
+
+      return Response.ok(
+        jsonEncode({'message': 'Password has been reset successfully.'}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e) {
+      return Response.badRequest(
+        body: jsonEncode({'message': e.toString().replaceAll('Exception: ', '')}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+  }
+
   Future<Response> logout(Request request) async {
     return Response.ok(
       jsonEncode({'message': 'Logged out successfully'}),
