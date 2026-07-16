@@ -136,7 +136,7 @@ class CronService {
             count++;
           }
         }
-        print('✅ Đã gửi $count thông báo sắp hết hạn.');
+        print('✅ Đã gửi $count thông báo sắp hết hạn.')
       } else {
         print('✅ Không có User nào sắp hết hạn trong 3 ngày tới.');
       }
