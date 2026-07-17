@@ -1,0 +1,4 @@
+cd D:\0.PRM_Project\ngrok-v3-stable-windows-amd64
+.\ngrok http --domain=avenue-outward-scant.ngrok-free.dev 8080
+Điện thoại
+https://avenue-outward-scant.ngrok-free.dev
