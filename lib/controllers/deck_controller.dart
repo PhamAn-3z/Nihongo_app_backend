@@ -418,6 +418,46 @@ class DeckController {
     }
   }
 
+  Future<Response> toggleCommentLike(Request request) async {
+    try {
+      final payload = request.context['authPayload'] as Map<String, dynamic>?;
+      if (payload == null || payload['userId'] == null) {
+        return Response.forbidden(jsonEncode({'message': 'Unauthorized'}));
+      }
+
+      final dynamic userId = payload['userId'];
+      final String? commentIdStr = request.params['comment_id'];
+
+      if (commentIdStr == null) {
+        return Response.badRequest(body: jsonEncode({'message': 'Missing comment ID'}));
+      }
+
+      final int commentId = int.parse(commentIdStr);
+      final result = await _deckService.toggleCommentLike(
+        commentId: commentId,
+        userId: userId,
+      );
+
+      return Response.ok(
+        jsonEncode({
+          "success": true,
+          "message": result['isLiked'] ? "Đã thích bình luận!" : "Đã bỏ thích bình luận!",
+          "data": result
+        }),
+        headers: {'content-type': 'application/json'},
+      );
+    } catch (e) {
+      final message = e.toString().contains('Exception: ') 
+          ? e.toString().split('Exception: ')[1] 
+          : e.toString();
+
+      return Response(400,
+        body: jsonEncode({"success": false, "message": message}),
+        headers: {'content-type': 'application/json'},
+      );
+    }
+  }
+
   Future<Response> getRecentlyViewedDecks(Request request) async {
     try {
       final payload = request.context['authPayload'] as Map<String, dynamic>?;

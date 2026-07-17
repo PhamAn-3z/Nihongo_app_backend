@@ -8,5 +8,8 @@ Router commentRoutes(DeckController controller) {
   // Xóa bình luận
   router.delete('/<comment_id>', controller.deleteComment);
 
+  // Toggle Like bình luận (Thích/Bỏ thích)
+  router.post('/<comment_id>/toggle-like', controller.toggleCommentLike);
+
   return router;
 }

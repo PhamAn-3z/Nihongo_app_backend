@@ -117,10 +117,7 @@ class DeckRepository {
       }
 
       // Bulk insert terms và users_positions
-      await Future.wait([
-        _client.from('terms').insert(termsToInsert),
-        _client.from('users_positions').insert(usersPositionsToInsert),
-      ]);
+      await _client.from('terms').insert(termsToInsert); await _client.from('users_positions').insert(usersPositionsToInsert);
 
       return {
         'deckId': deckId,
@@ -547,6 +544,39 @@ class DeckRepository {
     await _client.from('deck_comments').delete().eq('comment_id', commentId);
   }
 
+  Future<bool> toggleCommentLike(int userId, int commentId) async {
+    final existing = await _client
+        .from('comment_likes')
+        .select()
+        .eq('user_id', userId)
+        .eq('comment_id', commentId)
+        .maybeSingle();
+
+    if (existing != null) {
+      await _client
+          .from('comment_likes')
+          .delete()
+          .eq('user_id', userId)
+          .eq('comment_id', commentId);
+      return false; // Trả về false nghĩa là vừa thực hiện UNLIKE
+    } else {
+      await _client.from('comment_likes').insert({
+        'user_id': userId,
+        'comment_id': commentId,
+      });
+      return true; // Trả về true nghĩa là vừa thực hiện LIKE
+    }
+  }
+
+  Future<int> countCommentLikes(int commentId) async {
+    final response = await _client
+        .from('comment_likes')
+        .select()
+        .eq('comment_id', commentId)
+        .count(CountOption.exact);
+    return response.count;
+  }
+
   Future<int> countUserCreatedDecks(int userId) async {
     final response = await _client
         .from('decks')
@@ -557,3 +587,4 @@ class DeckRepository {
     return response.count;
   }
 }
+

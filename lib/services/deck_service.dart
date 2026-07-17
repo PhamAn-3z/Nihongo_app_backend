@@ -184,7 +184,16 @@ class DeckService {
 
       final int viewsToday = studyLogs.where((log) {
         final String? studiedAt = log['studied_at'];
-        return studiedAt != null && studiedAt.startsWith(todayStr);
+        if (studiedAt == null) return false;
+        
+        try {
+          final logDate = DateTime.parse(studiedAt).toLocal();
+          return logDate.year == now.year && 
+                 logDate.month == now.month && 
+                 logDate.day == now.day;
+        } catch (_) {
+          return studiedAt.startsWith(todayStr);
+        }
       }).length;
 
       return {
@@ -720,5 +729,29 @@ class DeckService {
 
     // Bước 4: Xóa
     await _deckRepository.deleteComment(commentId);
+  }
+
+  Future<Map<String, dynamic>> toggleCommentLike({
+    required int commentId,
+    required dynamic userId,
+  }) async {
+    final int formattedUserId = userId is String ? int.parse(userId) : userId as int;
+
+    // 1. Kiểm tra comment tồn tại
+    final comment = await _deckRepository.getCommentById(commentId);
+    if (comment == null) {
+      throw Exception('Bình luận không tồn tại hoặc đã bị xóa!');
+    }
+
+    // 2. Thực hiện toggle (Like/Unlike)
+    final bool isLiked = await _deckRepository.toggleCommentLike(formattedUserId, commentId);
+
+    // 3. Lấy tổng số like mới
+    final int totalLikes = await _deckRepository.countCommentLikes(commentId);
+
+    return {
+      'isLiked': isLiked,
+      'totalLikes': totalLikes,
+    };
   }
 }
