@@ -19,7 +19,10 @@ class AuthController {
 
       if (email == null || password == null) {
         return Response.badRequest(
-          body: jsonEncode({'message': 'Email and password are required'}),
+          body: jsonEncode({
+            'success': false,
+            'message': 'Email and password are required'
+          }),
           headers: {'Content-Type': 'application/json'},
         );
       }
@@ -33,6 +36,7 @@ class AuthController {
         return Response(
           401,
           body: jsonEncode({
+            'success': false,
             'message': 'Invalid email or password',
           }),
           headers: {'Content-Type': 'application/json'},
@@ -41,7 +45,11 @@ class AuthController {
 
       return Response.ok(
         jsonEncode({
-          'token': token,
+          'success': true,
+          'message': 'Login successful',
+          'data': {
+            'token': token,
+          }
         }),
         headers: {
           'Content-Type': 'application/json',
@@ -53,6 +61,7 @@ class AuthController {
       return Response(
         errorMsg.contains('verify your email') ? 403 : 500,
         body: jsonEncode({
+          'success': false,
           'message': errorMsg,
         }),
         headers: {'Content-Type': 'application/json'},
@@ -73,7 +82,10 @@ class AuthController {
       // 1. Kiểm tra các trường bắt buộc
       if (email == null || password == null || confirmedPassword == null || username == null) {
         return Response.badRequest(
-          body: jsonEncode({'message': 'Email, password, confirmed_password, and username are required'}),
+          body: jsonEncode({
+            'success': false,
+            'message': 'Email, password, confirmed_password, and username are required'
+          }),
           headers: {'Content-Type': 'application/json'},
         );
       }
@@ -81,7 +93,10 @@ class AuthController {
       // 2. Kiểm tra mật khẩu trùng khớp
       if (password != confirmedPassword) {
         return Response.badRequest(
-          body: jsonEncode({'message': 'Passwords do not match'}),
+          body: jsonEncode({
+            'success': false,
+            'message': 'Passwords do not match'
+          }),
           headers: {'Content-Type': 'application/json'},
         );
       }
@@ -90,6 +105,7 @@ class AuthController {
       if (!PasswordUtils.isStrongPassword(password)) {
         return Response.badRequest(
           body: jsonEncode({
+            'success': false,
             'message': 'Password must be at least 8 characters long, include at least one number and one uppercase letter'
           }),
           headers: {'Content-Type': 'application/json'},
@@ -104,11 +120,14 @@ class AuthController {
 
       return Response.ok(
         jsonEncode({
+          'success': true,
           'message': 'User registered successfully. Please check your email for verification OTP.',
-          'user': {
-            'id': user?['user_id'],
-            'email': user?['email'],
-            'username': user?['username'],
+          'data': {
+            'user': {
+              'id': user?['user_id'],
+              'email': user?['email'],
+              'username': user?['username'],
+            },
           },
         }),
         headers: {
@@ -123,6 +142,7 @@ class AuthController {
       return Response(
         isBadRequest ? 400 : 500,
         body: jsonEncode({
+          'success': false,
           'message': errorMsg,
         }),
         headers: {'Content-Type': 'application/json'},
@@ -140,7 +160,10 @@ class AuthController {
 
       if (email == null || otp == null) {
         return Response.badRequest(
-          body: jsonEncode({'message': 'Email and OTP are required'}),
+          body: jsonEncode({
+            'success': false,
+            'message': 'Email and OTP are required'
+          }),
           headers: {'Content-Type': 'application/json'},
         );
       }
@@ -148,12 +171,16 @@ class AuthController {
       await authService.verifyOtp(email: email, otp: otp);
 
       return Response.ok(
-        jsonEncode({'message': 'Email verified successfully. You can now login.'}),
+        jsonEncode({
+          'success': true,
+          'message': 'Email verified successfully. You can now login.'
+        }),
         headers: {'Content-Type': 'application/json'},
       );
     } catch (e) {
       return Response.badRequest(
         body: jsonEncode({
+          'success': false,
           'message': e.toString().replaceAll('Exception: ', ''),
         }),
         headers: {'Content-Type': 'application/json'},

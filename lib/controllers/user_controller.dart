@@ -75,7 +75,13 @@ class UserController {
         headers: {'content-type': 'application/json'},
       );
     } catch (e) {
-      return Response.internalServerError(body: jsonEncode({"message": e.toString()}));
+      return Response.internalServerError(
+        body: jsonEncode({
+          "success": false,
+          "message": e.toString()
+        }),
+        headers: {'content-type': 'application/json'},
+      );
     }
   }
 
@@ -116,7 +122,13 @@ class UserController {
         headers: {'content-type': 'application/json'},
       );
     } catch (e) {
-      return Response.internalServerError(body: jsonEncode({"message": e.toString()}));
+      return Response.internalServerError(
+        body: jsonEncode({
+          "success": false,
+          "message": e.toString()
+        }),
+        headers: {'content-type': 'application/json'},
+      );
     }
   }
 }
